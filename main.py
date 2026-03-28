@@ -31,7 +31,20 @@ def main():
 
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)
-        json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        result_with_material = {
+            **result,
+            "scene": {
+                "buildings": [
+                    {**b, "material": b.get("material", "concrete")}
+                    for b in result.get("scene", {}).get("buildings", [])
+                ],
+                "roads": [
+                    {**r, "material": r.get("material", "marble")}
+                    for r in result.get("scene", {}).get("roads", [])
+                ],
+            },
+        } if result.get("scene") else result
+        json_path.write_text(json.dumps(result_with_material, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[main] JSON saved: {json_path}")
 
         scene_data = result.get("scene", {"buildings": [], "roads": []})
@@ -41,6 +54,30 @@ def main():
 
         # Step 2: JSON → PLY + XML
         scene_dir = str(Path("simple_scene") / name)
+        Path(scene_dir).mkdir(parents=True, exist_ok=True)
+
+        # 保存完整参数到场景目录（材质补全默认值）
+        scene_desc_path = Path(scene_dir) / "scene_description.json"
+        scene_data_with_material = {
+            "buildings": [
+                {**b, "material": b.get("material", "concrete")}
+                for b in scene_data.get("buildings", [])
+            ],
+            "roads": [
+                {**r, "material": r.get("material", "marble")}
+                for r in scene_data.get("roads", [])
+            ],
+        }
+        full_params = {
+            "location_name": name,
+            "scene": scene_data_with_material,
+            "tx": tx_params,
+            "rx": rx_params,
+            "rt": rt_params,
+        }
+        scene_desc_path.write_text(json.dumps(full_params, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[main] Scene description saved: {scene_desc_path}")
+
         xml_path = generate_scene(scene_data, scene_dir, {**rt_params, "frequency_ghz": tx_params.get("frequency_ghz", 28.0)})
 
         # Step 3: 俯视图

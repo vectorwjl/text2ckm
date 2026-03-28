@@ -6,7 +6,7 @@ import requests
 import json
 from config import DEEPSEEK_API_KEY, DEEPSEEK_API_URL, DEEPSEEK_MODEL
 
-SYSTEM_PROMPT = """You are an AI assistant for a Channel Knowledge Map (CKM) Generator application.
+SYSTEM_PROMPT = """You are an assistant for a Channel Knowledge Map (CKM) Generator application.
 Your task is to extract simulation parameters from user queries and return them in JSON format.
 
 SUPPORTED PARAMETERS:
@@ -101,8 +101,6 @@ SPATIAL LAYOUT RULES (CRITICAL for scene generation):
 - Roads should connect at intersections, not terminate inside building footprints
 
 RULES:
-- For unrelated queries, return intent: "unrelated" with polite explanation
-- Always provide confidence score (0-1) based on query clarity
 - Only extract parameters explicitly mentioned or clearly implied
 - NEVER include tx/rx/rt fields that the user did NOT mention. Omit them entirely rather than filling with 0 or default values.
 - Validate ranges: lat (-90 to 90), lon (-180 to 180), power (0-100), heights (> 0), frequency (0.5-100 GHz)
@@ -141,7 +139,7 @@ def text_to_scene_json(text: str) -> dict:
         "max_tokens": 3000,
         "response_format": {"type": "json_object"},
     }
-    resp = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=60)
+    resp = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=120)
     resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"]
     return json.loads(content)

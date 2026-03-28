@@ -10,7 +10,7 @@ import xml.dom.minidom
 
 from blender_generator import generate_scene_from_description
 from utils.mesh_utils import save_mesh_as_ply
-from utils.material_utils import get_all_material_properties, select_ground_material
+from utils.material_utils import get_all_material_properties, select_ground_material, normalize_material_name
 
 
 def xml_mesh_ref(abs_path: str) -> str:
@@ -90,7 +90,7 @@ def generate_scene(scene_data: dict, scene_dir: str, rt_params: dict = None) -> 
     for idx, (ply_path, material) in enumerate(mesh_results):
         shape = ET.SubElement(scene_xml, "shape", type="ply", id=f"mesh-obj-{idx}")
         ET.SubElement(shape, "string", name="filename", value=xml_mesh_ref(ply_path))
-        ET.SubElement(shape, "ref", id=material, name="bsdf")
+        ET.SubElement(shape, "ref", id=normalize_material_name(material), name="bsdf")
         ET.SubElement(shape, "boolean", name="face_normals", value="true")
 
     ground_material = select_ground_material(tx_frequency_ghz, "wet_ground")
