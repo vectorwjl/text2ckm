@@ -4,3 +4,4 @@ matplotlib
 pyvista
 sionna
 tensorflow
+shapely

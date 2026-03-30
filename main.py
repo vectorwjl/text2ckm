@@ -10,6 +10,9 @@ from step1_text_to_json import text_to_scene_json
 from step2_json_to_scene import generate_scene
 from step3_render_topdown import render_topdown
 from step4_path_gain import generate_path_gain
+from overlap_checker import check_overlaps, format_overlap_feedback
+
+MAX_OVERLAP_RETRIES = 3
 
 
 def main():
@@ -24,10 +27,27 @@ def main():
         print(f"[main] Processing: {name}")
         print(f"{'='*50}")
 
-        # Step 1: text → JSON
+        # Step 1: text → JSON（含重叠检测重试）
         text = txt_file.read_text(encoding="utf-8")
-        print(f"[main] Calling DeepSeek API...")
-        result = text_to_scene_json(text)
+        retry_text = text
+        result = None
+        for attempt in range(MAX_OVERLAP_RETRIES + 1):
+            print(f"[main] Calling DeepSeek API (attempt {attempt + 1}/{MAX_OVERLAP_RETRIES + 1})...")
+            result = text_to_scene_json(retry_text)
+            scene_check = result.get("scene", {})
+            overlaps = check_overlaps(scene_check)
+            if not overlaps:
+                if attempt > 0:
+                    print(f"[main] Overlaps resolved on attempt {attempt + 1}.")
+                else:
+                    print(f"[main] No overlaps detected.")
+                break
+            if attempt < MAX_OVERLAP_RETRIES:
+                feedback = format_overlap_feedback(overlaps)
+                print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
+                retry_text = text + "\n\n" + feedback
+            else:
+                print(f"[main] WARNING: {len(overlaps)} overlap(s) remain after {MAX_OVERLAP_RETRIES} retries. Proceeding anyway.")
 
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)
