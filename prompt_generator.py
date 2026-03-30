@@ -1,0 +1,315 @@
+"""
+prompt_generator.py — 随机生成中文场景描述提示词，保存为 .txt 文件供 main.py 消费。
+
+用法：
+    python prompt_generator.py                         # 生成 1 个提示词到 text_prompts/
+    python prompt_generator.py --count 10              # 生成 10 个
+    python prompt_generator.py --count 5 --output-dir text_prompts/ --prefix scene_
+"""
+
+import argparse
+import random
+import re
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# 常量映射
+# ---------------------------------------------------------------------------
+
+BUILDING_TYPE_NAMES = {
+    "rectangular": "矩形建筑",
+    "cylindrical": "圆柱形建筑",
+    "l_shaped":    "L形建筑",
+    "t_shaped":    "T形建筑",
+    "u_shaped":    "U形庭院建筑",
+    "ring":        "环形建筑",
+}
+
+MATERIAL_NAMES = {
+    "concrete": "混凝土",
+    "marble":   "大理石",
+    "metal":    "金属",
+    "wood":     "木材",
+    "glass":    "玻璃幕墙",
+}
+
+# 建筑材质权重（偏向混凝土，玻璃/金属次之）
+BUILDING_MATERIAL_WEIGHTS = {
+    "concrete": 0.45,
+    "glass":    0.20,
+    "metal":    0.15,
+    "marble":   0.10,
+    "wood":     0.10,
+}
+
+ROAD_MATERIAL_WEIGHTS = {
+    "marble":   0.70,
+    "concrete": 0.20,
+    "metal":    0.10,
+}
+
+# 常用频段（GHz）
+FREQ_CANDIDATES = [0.9, 1.8, 2.4, 3.5, 5.8, 28.0, 39.0, 60.0]
+
+
+# ---------------------------------------------------------------------------
+# 工具函数
+# ---------------------------------------------------------------------------
+
+def _r(lo: float, hi: float, decimals: int = 2) -> float:
+    """在 [lo, hi] 范围内生成指定小数位的随机浮点数。"""
+    val = random.uniform(lo, hi)
+    return round(val, decimals)
+
+
+def _weighted_choice(weight_dict: dict):
+    keys = list(weight_dict.keys())
+    weights = list(weight_dict.values())
+    return random.choices(keys, weights=weights, k=1)[0]
+
+
+# ---------------------------------------------------------------------------
+# 高度描述
+# ---------------------------------------------------------------------------
+
+def _rand_height_desc() -> str:
+    """随机生成高度描述：固定值或范围。"""
+    use_range = random.random() < 0.5
+    if use_range:
+        h_min = _r(5.0, 60.0)
+        h_max = _r(h_min + 10.0, min(h_min + 80.0, 150.0))
+        return f"高度随机从{h_min}到{h_max}米"
+    else:
+        h = _r(5.0, 120.0)
+        return f"高度{h}米"
+
+
+# ---------------------------------------------------------------------------
+# 各建筑类型的尺寸描述
+# ---------------------------------------------------------------------------
+
+def _dim_desc_rectangular() -> str:
+    use_range = random.random() < 0.5
+    if use_range:
+        w_min = _r(8.0, 20.0)
+        w_max = _r(w_min + 3.0, 30.0)
+        l_min = _r(8.0, 25.0)
+        l_max = _r(l_min + 3.0, 40.0)
+        return f"宽度随机从{w_min}到{w_max}米，长度随机从{l_min}到{l_max}米"
+    else:
+        w = _r(8.0, 30.0)
+        l = _r(8.0, 40.0)
+        return f"宽{w}米、长{l}米"
+
+
+def _dim_desc_cylindrical() -> str:
+    use_range = random.random() < 0.4
+    if use_range:
+        r_min = _r(4.0, 10.0)
+        r_max = _r(r_min + 2.0, 15.0)
+        return f"半径随机从{r_min}到{r_max}米"
+    else:
+        r = _r(4.0, 15.0)
+        return f"半径{r}米"
+
+
+def _dim_desc_l_shaped() -> str:
+    w1 = _r(15.0, 35.0)
+    l1 = _r(15.0, 35.0)
+    w2 = _r(5.0, min(w1 * 0.7, 20.0))
+    l2 = _r(5.0, min(l1 * 0.7, 20.0))
+    return f"主体{w1}×{l1}米，翼部{w2}×{l2}米"
+
+
+def _dim_desc_t_shaped() -> str:
+    mw = _r(20.0, 50.0)
+    ml = _r(15.0, 35.0)
+    ww = _r(8.0, min(mw * 0.5, 20.0))
+    wl = _r(6.0, min(ml * 0.5, 15.0))
+    return f"主体{mw}×{ml}米，侧翼{ww}×{wl}米"
+
+
+def _dim_desc_u_shaped() -> str:
+    ow = _r(30.0, 60.0)
+    ol = _r(30.0, 60.0)
+    factor = _r(0.4, 0.7)
+    iw = round(ow * factor, 2)
+    il = round(ol * factor, 2)
+    return f"外围{ow}×{ol}米，内庭{iw}×{il}米"
+
+
+def _dim_desc_ring() -> str:
+    outer_r = _r(15.0, 35.0)
+    inner_r = round(outer_r * _r(0.5, 0.8), 2)
+    return f"外半径{outer_r}米，内半径{inner_r}米"
+
+
+_DIM_DESC_FUNCS = {
+    "rectangular": _dim_desc_rectangular,
+    "cylindrical": _dim_desc_cylindrical,
+    "l_shaped":    _dim_desc_l_shaped,
+    "t_shaped":    _dim_desc_t_shaped,
+    "u_shaped":    _dim_desc_u_shaped,
+    "ring":        _dim_desc_ring,
+}
+
+
+# ---------------------------------------------------------------------------
+# 建筑组描述
+# ---------------------------------------------------------------------------
+
+def _rand_building_group(btype: str, count: int) -> str:
+    """生成一组同类型建筑的完整中文描述片段。"""
+    type_name = BUILDING_TYPE_NAMES[btype]
+    dim_desc = _DIM_DESC_FUNCS[btype]()
+    height_desc = _rand_height_desc()
+    mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+    mat_name = MATERIAL_NAMES[mat]
+    return f"{count}栋{type_name}（{dim_desc}，{height_desc}，{mat_name}材质）"
+
+
+# ---------------------------------------------------------------------------
+# 道路描述
+# ---------------------------------------------------------------------------
+
+def _rand_road_desc(n_roads: int) -> str:
+    """生成道路描述片段。"""
+    rtype = random.choices(["直线", "曲线"], weights=[0.8, 0.2])[0]
+    width = _r(6.0, 12.0)
+    mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    mat_name = MATERIAL_NAMES[mat]
+    return f"{n_roads}条{rtype}道路（宽{width}米，{mat_name}材质）"
+
+
+# ---------------------------------------------------------------------------
+# TX / RX / RT 描述
+# ---------------------------------------------------------------------------
+
+def _rand_tx_desc() -> str:
+    freq = random.choice(FREQ_CANDIDATES)
+    power = random.randint(20, 50)
+    z = _r(5.0, 50.0)
+    return f"发射机在场景中心高度{z}米，频率{freq}GHz，功率{power}dBm"
+
+
+def _rand_rx_desc() -> str:
+    rx_h = _r(1.0, 3.0)
+    return f"接收机高度{rx_h}米"
+
+
+def _rand_rt_desc() -> str:
+    map_size = random.randint(150, 400)
+    return f"地图尺寸{map_size}米"
+
+
+# ---------------------------------------------------------------------------
+# 完整提示词生成
+# ---------------------------------------------------------------------------
+
+def generate_random_prompt() -> str:
+    """生成一条完整的随机中文场景提示词。"""
+    all_types = list(BUILDING_TYPE_NAMES.keys())
+
+    # 决定类型组合数量
+    n_type_groups = random.choices([1, 2, 3], weights=[0.50, 0.35, 0.15])[0]
+    selected_types = random.sample(all_types, n_type_groups)
+
+    # 决定总建筑数，并分配到各类型
+    total_buildings = random.randint(3, 15)
+    if n_type_groups == 1:
+        counts = [total_buildings]
+    else:
+        # 保证每组至少 1 栋
+        counts = [1] * n_type_groups
+        remaining = total_buildings - n_type_groups
+        for i in range(remaining):
+            counts[random.randint(0, n_type_groups - 1)] += 1
+
+    # 道路数量
+    n_roads = random.randint(1, 3)
+
+    # 组装建筑描述
+    if n_type_groups == 1:
+        btype = selected_types[0]
+        type_name = BUILDING_TYPE_NAMES[btype]
+        dim_desc = _DIM_DESC_FUNCS[btype]()
+        height_desc = _rand_height_desc()
+        mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+        mat_name = MATERIAL_NAMES[mat]
+        building_part = (
+            f"在场景中心周围随机放置{total_buildings}栋{type_name}，"
+            f"{dim_desc}，{height_desc}，材质为{mat_name}"
+        )
+    else:
+        group_descs = [
+            _rand_building_group(btype, cnt)
+            for btype, cnt in zip(selected_types, counts)
+        ]
+        building_part = (
+            f"在场景中心周围随机放置{total_buildings}栋建筑，包括"
+            + "、".join(group_descs)
+        )
+
+    road_part = f"在建筑间创建{_rand_road_desc(n_roads)}"
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = f"创建虚拟场景：{building_part}，{road_part}，{tx_part}，{rx_part}，{rt_part}"
+    return prompt
+
+
+# ---------------------------------------------------------------------------
+# 文件保存
+# ---------------------------------------------------------------------------
+
+def _next_filename(output_dir: Path, prefix: str) -> Path:
+    """扫描已有同前缀文件，返回下一个可用文件名（如 scene_007.txt）。"""
+    pattern = re.compile(rf"^{re.escape(prefix)}(\d+)\.txt$")
+    max_num = 0
+    for f in output_dir.glob(f"{prefix}*.txt"):
+        m = pattern.match(f.name)
+        if m:
+            max_num = max(max_num, int(m.group(1)))
+    next_num = max_num + 1
+    return output_dir / f"{prefix}{next_num:03d}.txt"
+
+
+# ---------------------------------------------------------------------------
+# CLI 入口
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="随机生成中文场景提示词并保存为 .txt 文件"
+    )
+    parser.add_argument(
+        "--count", "-n", type=int, default=1,
+        help="生成提示词数量（默认 1）"
+    )
+    parser.add_argument(
+        "--output-dir", "-o", type=str, default="text_prompts",
+        help="输出目录（默认 text_prompts/）"
+    )
+    parser.add_argument(
+        "--prefix", "-p", type=str, default="scene_",
+        help="文件名前缀（默认 scene_）"
+    )
+    args = parser.parse_args()
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for i in range(args.count):
+        prompt = generate_random_prompt()
+        filepath = _next_filename(output_dir, args.prefix)
+        filepath.write_text(prompt + "\n", encoding="utf-8")
+        print(f"[{i+1}/{args.count}] Saved: {filepath}")
+        print(f"        {prompt}\n")
+
+    print(f"Done. {args.count} prompt(s) saved to {output_dir}/")
+
+
+if __name__ == "__main__":
+    main()
