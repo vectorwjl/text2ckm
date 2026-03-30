@@ -81,20 +81,20 @@ EXAMPLES:
   → {"intent": "scene_generation", "scene": {"buildings": [{"type": "cylindrical", "x": 0, "y": 0, "radius": 10, "height": 30, "material": "metal"}], "roads": []}, "confidence": 0.9, "explanation": "Created a metal cylindrical tower"}
 
 - "在场景中心周围随机放置N栋矩形建筑物，高度50-100m，并在建筑物之间创建道路" (N can be any number)
-  → Grid layout rule: spacing=30m between building centers, roads at midpoints between grid lines (width=8).
-    Step 1: compute grid size: cols=ceil(sqrt(N)), rows=ceil(N/cols). Grid x positions: [-(cols-1)/2*30, ..., (cols-1)/2*30]. Grid y positions: [-(rows-1)/2*30, ..., (rows-1)/2*30].
-    Step 2: take exactly the first N grid nodes as building positions. Assign random heights 50-100m.
-    Step 3: roads run at midpoints between adjacent grid lines (x midpoints and y midpoints), spanning the full scene width.
-    Example for N=4 (2x2 grid): buildings at (-15,-15),(15,-15),(-15,15),(15,15); roads at x=0 and y=0.
-    Example for N=6 (3x2 grid): buildings at (-30,-15),(0,-15),(30,-15),(-30,15),(0,15),(30,15); roads at x=-15,x=15 and y=0.
-    CRITICAL: generate EXACTLY N buildings — no more, no less. Do NOT reuse coordinates from any example.
-    {"intent": "scene_generation", "scene": {"buildings": [/* exactly N buildings */], "roads": [/* roads at grid midlines */]}, "confidence": 0.9, "explanation": "N栋建筑按网格排列，道路在建筑间隙中通过"}
+  → Random placement rule: buildings are placed COMPLETELY RANDOMLY on a fine-grained grid with 0.01m resolution.
+    Step 1: determine map bounds (default ±80m from center if not specified).
+    Step 2: for each building, generate a UNIQUE random position (x, y) within map bounds, with 0.01m precision (2 decimal places). Do NOT use a fixed grid formula — every run must produce different coordinates.
+    Step 3: ensure minimum clearance between every pair of buildings: distance between centers >= max(width,length) of each + 5m.
+    Step 4: assign random heights with 0.01m precision (e.g., 52.37, 78.14, 63.89). Do NOT use round integers.
+    Step 5: place 1-2 straight roads passing between the buildings (not through them), width=8.
+    CRITICAL: generate EXACTLY N buildings — no more, no less. All coordinates (x, y) and dimensions (width, length, height) MUST be floating-point numbers with 2 decimal places, NOT integers.
+    {"intent": "scene_generation", "scene": {"buildings": [/* exactly N buildings, random float positions and heights */], "roads": [/* roads between buildings */]}, "confidence": 0.9, "explanation": "N栋建筑完全随机放置，坐标和高度均为0.01m精度的小数"}
 
 SPATIAL LAYOUT RULES (CRITICAL for scene generation):
 - Roads run BETWEEN buildings, never THROUGH them
 - Every building must have clearance from any road edge: clearance >= road_width/2 + 5m
 - For "N random buildings with roads between them" requests:
-  1. Use a grid/block layout: place buildings at grid nodes, roads in the gaps between grid lines
+  1. Place buildings at RANDOM positions with 0.01m precision, not a fixed grid formula
   2. Building center must satisfy: |distance_to_road_centerline| >= building_half_size + road_width/2 + 5
   3. For rectangular buildings: half_size = max(width, length) / 2
   4. For cylindrical buildings: half_size = radius
@@ -109,6 +109,7 @@ RULES:
 - Material is optional; only include if explicitly mentioned by user
 - Support both English and Chinese queries
 - Return ONLY valid JSON, no markdown formatting
+- PRECISION: All spatial coordinates (x, y, z) and dimensions (width, length, height, radius, etc.) MUST use floating-point numbers with 2 decimal places (0.01m grid resolution). NEVER use plain integers for these values. Examples: use 32.47 not 32, use -15.83 not -15, use 8.00 not 8.
 
 RESPONSE FORMAT (JSON only):
 {
