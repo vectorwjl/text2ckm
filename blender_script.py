@@ -96,16 +96,6 @@ def _make_rectangular(x, y, width, length, height):
     return obj
 
 
-def _make_cylindrical(x, y, radius, height, vertices=32):
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=vertices,
-        radius=radius,
-        depth=height,
-        location=(x, y, height / 2),
-    )
-    return _active_obj()
-
-
 def _make_box_obj(cx, cy, w, l, h, name="box"):
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
@@ -161,16 +151,6 @@ def _apply_boolean(base, cutter, operation='DIFFERENCE'):
 def _make_u_shaped(x, y, outer_w, outer_l, inner_w, inner_l, height):
     outer = _make_box_obj(x, y, outer_w, outer_l, height * 1.1, "u_outer")
     inner = _make_box_obj(x, y + (outer_l - inner_l) / 2, inner_w, inner_l, height * 1.2, "u_inner")
-    return _apply_boolean(outer, inner)
-
-
-def _make_ring(x, y, outer_r, inner_r, height, vertices=32):
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=vertices, radius=outer_r, depth=height * 1.1, location=(x, y, height / 2))
-    outer = _active_obj()
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=vertices, radius=inner_r, depth=height * 1.2, location=(x, y, height / 2))
-    inner = _active_obj()
     return _apply_boolean(outer, inner)
 
 
@@ -290,9 +270,6 @@ def main():
                 w = float(b.get("width", 10))
                 l = float(b.get("length", b.get("width", 10)))
                 obj = _make_rectangular(x, y, w, l, height)
-            elif btype == "cylindrical":
-                r = float(b.get("radius", 5))
-                obj = _make_cylindrical(x, y, r, height)
             elif btype == "l_shaped":
                 obj = _make_l_shaped(x, y,
                     float(b.get("width1", 10)), float(b.get("length1", 10)),
@@ -307,10 +284,6 @@ def main():
                 obj = _make_u_shaped(x, y,
                     float(b.get("outer_width", 40)), float(b.get("outer_length", 30)),
                     float(b.get("inner_width", 20)), float(b.get("inner_length", 20)),
-                    height)
-            elif btype == "ring":
-                obj = _make_ring(x, y,
-                    float(b.get("outer_radius", 15)), float(b.get("inner_radius", 8)),
                     height)
             else:
                 print(f"[blender_script] Unknown building type '{btype}', skipping.")

@@ -28,11 +28,9 @@ SUPPORTED PARAMETERS:
 
    BUILDING TYPES (all support optional rotation_deg: float 0–360, degrees around Z-axis, default 0):
    - rectangular: Basic box building (width, length, height, rotation_deg)
-   - cylindrical: Round tower (radius, height, rotation_deg)
    - l_shaped: L-shaped building (width1, length1, width2, length2, height, rotation_deg)
    - t_shaped: T-shaped commercial complex (main_width, main_length, wing_width, wing_length, height, rotation_deg)
    - u_shaped: U-shaped courtyard building (outer_width, outer_length, inner_width, inner_length, height, rotation_deg)
-   - ring: Ring-shaped stadium (outer_radius, inner_radius, height, rotation_deg)
 
    ROAD TYPES:
    - straight: Straight road (start, end, width)
@@ -65,9 +63,6 @@ EXAMPLES:
 - "生成一个 U 型庭院建筑，外围 40x30 米，内部庭院 20x15 米，高 12 米"
   → {"intent": "scene_generation", "scene": {"buildings": [{"type": "u_shaped", "x": 0, "y": 0, "outer_width": 40, "outer_length": 30, "inner_width": 20, "inner_length": 15, "height": 12}], "roads": []}, "confidence": 0.9, "explanation": "创建了一个 U 型庭院建筑"}
 
-- "创建一个环形体育场，外半径 50 米，内半径 40 米，高 25 米"
-  → {"intent": "scene_generation", "scene": {"buildings": [{"type": "ring", "x": 0, "y": 0, "outer_radius": 50, "inner_radius": 40, "height": 25}], "roads": []}, "confidence": 0.9, "explanation": "创建了一个环形体育场"}
-
 - "生成一条曲线道路，从 (-50, 0) 经过 (0, 20) 到 (50, 0)，宽 8 米"
   → {"intent": "scene_generation", "scene": {"buildings": [], "roads": [{"type": "curved", "points": [[-50, 0], [0, 20], [50, 0]], "width": 8, "smooth": true}]}, "confidence": 0.85, "explanation": "创建了一条平滑的曲线道路"}
 
@@ -77,8 +72,6 @@ EXAMPLES:
 - "创建一栋玻璃幕墙建筑，20x30米，高25米"
   → {"intent": "scene_generation", "scene": {"buildings": [{"type": "rectangular", "x": 0, "y": 0, "width": 20, "length": 30, "height": 25, "material": "glass"}], "roads": []}, "confidence": 0.9, "explanation": "创建了一栋玻璃材质的建筑"}
 
-- "Generate a metal tower, radius 10m, height 30m"
-  → {"intent": "scene_generation", "scene": {"buildings": [{"type": "cylindrical", "x": 0, "y": 0, "radius": 10, "height": 30, "material": "metal"}], "roads": []}, "confidence": 0.9, "explanation": "Created a metal cylindrical tower"}
 
 - "在场景中心周围随机放置N栋矩形建筑物，高度50-100m，并在建筑物之间创建道路" (N can be any number)
   → Random placement rule: buildings are placed COMPLETELY RANDOMLY on a fine-grained grid with 0.01m resolution.
@@ -129,7 +122,6 @@ SPATIAL LAYOUT RULES (CRITICAL for scene generation):
   1. Place buildings at RANDOM positions with 0.01m precision, not a fixed grid formula
   2. Building center must satisfy: |distance_to_road_centerline| >= building_half_size + road_width/2 + 5
   3. For rectangular buildings: half_size = max(width, length) / 2
-  4. For cylindrical buildings: half_size = radius
 - Roads should connect at intersections, not terminate inside building footprints
 
 RULES:

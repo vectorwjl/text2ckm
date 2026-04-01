@@ -26,18 +26,12 @@ def _desc_building(idx: int, b: dict) -> str:
         w = float(b.get("width", 10))
         l = float(b.get("length", w))
         return f"Building {idx} (rectangular at ({x:.2f}, {y:.2f}), {w:.2f}×{l:.2f}m)"
-    elif btype == "cylindrical":
-        r = float(b.get("radius", 5))
-        return f"Building {idx} (cylindrical at ({x:.2f}, {y:.2f}), r={r:.2f}m)"
     elif btype == "l_shaped":
         return f"Building {idx} (l_shaped at ({x:.2f}, {y:.2f}))"
     elif btype == "t_shaped":
         return f"Building {idx} (t_shaped at ({x:.2f}, {y:.2f}))"
     elif btype == "u_shaped":
         return f"Building {idx} (u_shaped at ({x:.2f}, {y:.2f}))"
-    elif btype == "ring":
-        r = float(b.get("outer_radius", 15))
-        return f"Building {idx} (ring at ({x:.2f}, {y:.2f}), outer_r={r:.2f}m)"
     return f"Building {idx} ({btype} at ({x:.2f}, {y:.2f}))"
 
 
@@ -51,10 +45,6 @@ def building_to_polygon(b: dict) -> Polygon:
         w = float(b.get("width", 10))
         l = float(b.get("length", b.get("width", 10)))
         poly = box(x - w / 2, y - l / 2, x + w / 2, y + l / 2)
-
-    elif btype == "cylindrical":
-        r = float(b.get("radius", 5))
-        poly = Point(x, y).buffer(r, resolution=32)
 
     elif btype == "l_shaped":
         w1 = float(b.get("width1", 10))
@@ -91,13 +81,6 @@ def building_to_polygon(b: dict) -> Polygon:
         inner = box(x - iw / 2, inner_cy - il / 2, x + iw / 2, inner_cy + il / 2)
         result = outer.difference(inner)
         poly = result if not result.is_empty else outer
-
-    elif btype == "ring":
-        outer_r = float(b.get("outer_radius", 15))
-        inner_r = float(b.get("inner_radius", 8))
-        outer = Point(x, y).buffer(outer_r, resolution=32)
-        inner = Point(x, y).buffer(inner_r, resolution=32)
-        poly = outer.difference(inner)
 
     else:
         poly = Point(x, y).buffer(10.0, resolution=16)

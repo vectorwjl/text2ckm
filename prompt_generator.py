@@ -19,11 +19,9 @@ from pathlib import Path
 
 BUILDING_TYPE_NAMES = {
     "rectangular": "矩形建筑",
-    "cylindrical": "圆柱形建筑",
     "l_shaped":    "L形建筑",
     "t_shaped":    "T形建筑",
     "u_shaped":    "U形庭院建筑",
-    "ring":        "环形建筑",
 }
 
 MATERIAL_NAMES = {
@@ -103,17 +101,6 @@ def _dim_desc_rectangular() -> str:
         return f"宽{w}米、长{l}米"
 
 
-def _dim_desc_cylindrical() -> str:
-    use_range = random.random() < 0.4
-    if use_range:
-        r_min = _r(4.0, 10.0)
-        r_max = _r(r_min + 2.0, 15.0)
-        return f"半径随机从{r_min}到{r_max}米"
-    else:
-        r = _r(4.0, 15.0)
-        return f"半径{r}米"
-
-
 def _dim_desc_l_shaped() -> str:
     w1 = _r(15.0, 35.0)
     l1 = _r(15.0, 35.0)
@@ -139,19 +126,11 @@ def _dim_desc_u_shaped() -> str:
     return f"外围{ow}×{ol}米，内庭{iw}×{il}米"
 
 
-def _dim_desc_ring() -> str:
-    outer_r = _r(15.0, 35.0)
-    inner_r = round(outer_r * _r(0.5, 0.8), 2)
-    return f"外半径{outer_r}米，内半径{inner_r}米"
-
-
 _DIM_DESC_FUNCS = {
     "rectangular": _dim_desc_rectangular,
-    "cylindrical": _dim_desc_cylindrical,
     "l_shaped":    _dim_desc_l_shaped,
     "t_shaped":    _dim_desc_t_shaped,
     "u_shaped":    _dim_desc_u_shaped,
-    "ring":        _dim_desc_ring,
 }
 
 
