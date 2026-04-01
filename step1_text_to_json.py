@@ -84,36 +84,87 @@ EXAMPLES:
     CRITICAL: generate EXACTLY N buildings — no more, no less. All coordinates (x, y), dimensions (width, length, height), and rotation_deg MUST be floating-point numbers with 2 decimal places, NOT integers.
     {"intent": "scene_generation", "scene": {"buildings": [/* exactly N buildings, each with unique random position, dimensions, height, and rotation_deg */], "roads": [/* complex multi-road network */]}, "confidence": 0.9, "explanation": "N栋建筑完全随机放置，每栋独立随机尺寸和旋转角，复杂路网"}
 
-- "城市街区布局" / "按街区排列" / "urban block" / "city block layout"
-  → URBAN BLOCK LAYOUT RULE — follow these steps precisely:
-    Step 1: choose grid rotation angle θ (15.00°–50.00°, e.g., 32.00°). Convert to radians for math.
-    Step 2: compute unit vectors (use full float precision):
-        along = (cos(θ°), sin(θ°))   — road longitudinal direction
-        perp  = (-sin(θ°), cos(θ°))  — road perpendicular direction
-    Step 3: build the rotated road network (all roads same width = 7–10m):
-      Longitudinal roads (run in 'along' direction, spaced in 'perp' direction):
-        Use 2–3 roads; offsets k ∈ {-1,0,+1} or {-0.5,+0.5} × long_spacing (50–70m).
-        Road_start = (0,0) + k*long_spacing*perp − half_span*along
-        Road_end   = (0,0) + k*long_spacing*perp + half_span*along
-        where half_span = map_size/2 + 20 (roads extend slightly past map edge)
-      Transverse roads (run in 'perp' direction, spaced in 'along' direction):
-        Use 2–3 roads; offsets m × trans_spacing (45–65m).
-        Road_start = (0,0) + m*trans_spacing*along − half_span*perp
-        Road_end   = (0,0) + m*trans_spacing*along + half_span*perp
-    Step 4: identify city blocks — each block is the rectangle bounded by 2 adjacent
-        longitudinal roads and 2 adjacent transverse roads.
-        Block center = average of its 4 bounding road centerlines.
-    Step 5: fill EACH block with 2–4 buildings:
-        - All buildings in the SAME block share rotation_deg = θ (aligned with road grid)
-        - Arrange buildings in a row (along the 'along' axis) or 2×2 grid within the block
-        - Building center position: apply setback from each bordering road centerline:
-            dist_to_road_centerline >= road_width/2 + setback  (setback = 4.00–6.00m)
-        - Between adjacent buildings in a block: gap = 2.00–5.00m
-        - Each building must have DIFFERENT dimensions from all others (vary ±3–8m)
-        - Heights vary per building (unique float, 0.01m precision)
-    Step 6 (optional): add 1 diagonal road at angle θ+45° passing through scene center.
-    CRITICAL: compute all road endpoint coordinates using the exact vector formulas above.
-        All values use 0.01m precision. Setback rule must be satisfied for every building.
+LAYOUT STYLE RULES — when the prompt specifies one of these 7 layout styles, follow the corresponding rules:
+
+[Style 1] 方格网式 / "orthogonal grid" / "正交网格" / "方格网布局"
+  → Axis-aligned street grid layout:
+    Step 1: build N south-north roads (spacing 50–70m) and M east-west roads (spacing 45–65m), all straight.
+        Roads are parallel to X/Y axes (rotation 0°). Width 7–10m.
+    Step 2: identify city blocks (rectangles bounded by adjacent roads).
+        Block center = midpoint of its 4 bounding road centerlines.
+    Step 3: fill EACH block with 2–4 buildings:
+        - All buildings have rotation_deg = 0.00 (axis-aligned)
+        - Apply setback: dist_to_road_centerline >= road_width/2 + setback (4.00–6.00m)
+        - Gap between adjacent buildings in a block: 2.00–5.00m
+        - Each building has DIFFERENT dimensions (vary ±3–8m) and unique height (float, 0.01m)
+    CRITICAL: all values 0.01m precision.
+
+[Style 2] 行列式 / "slab row" / "板式行列"
+  → Parallel slab buildings in uniform rows:
+    Step 1: create 3–4 rows of buildings. Row direction is typically east-west (0°) or north-south (90°).
+    Step 2: each row contains 2–3 elongated rectangular buildings with aspect ratio >= 3:1 (length/width).
+        Example: width=10m, length=40m. Each building in the same row has rotation_deg equal to row angle.
+        Buildings in adjacent rows may differ by ±5°.
+    Step 3: row spacing (center-to-center) = 30–50m. Gap between buildings in the same row = 8–15m.
+    Step 4: place 2 roads running parallel to the rows (between rows), plus 1 cross road perpendicular to rows.
+        Road width 7–10m.
+    Step 5: each building must have DIFFERENT length (vary ±5m) and unique height.
+    CRITICAL: all coordinates and dimensions use 0.01m precision.
+
+[Style 3] 点式散布 / "point scatter" / "塔楼散点" / "点式"
+  → Isolated tower buildings scattered randomly:
+    Step 1: place 8–15 buildings at COMPLETELY RANDOM positions (0.01m precision), spread across the full map.
+        Small footprint, tall towers: for rectangular, keep width=length=10–20m; height 30–100m.
+    Step 2: minimum spacing between any two buildings >= 20m.
+    Step 3: each building has a UNIQUE random rotation_deg (0.00–359.99) and UNIQUE dimensions.
+    Step 4: use only 1–2 simple straight roads (H-shape or + shape). Road width 7–10m.
+    CRITICAL: no clustering — buildings must be spread evenly across the scene.
+
+[Style 4] 周边式 / "perimeter" / "围合" / "courtyard"
+  → Buildings arranged around block perimeters forming enclosed courtyards:
+    Step 1: lay out 2–4 square blocks (60–100m per side) in a grid or row.
+    Step 2: each block has 1 u_shaped building OR 2–3 l_shaped/rectangular buildings arranged to
+        surround 3–4 sides of the block. The inner courtyard area is left completely open.
+    Step 3: buildings face inward; rotation_deg aligned to the block axes (0.00° or 90.00°).
+    Step 4: perimeter roads run along the outside edges of each block (width 7–10m).
+        Apply setback: buildings >= road_width/2 + 3–5m from road centerline.
+    Step 5: each building has DIFFERENT dimensions and unique height.
+    CRITICAL: inner courtyard must remain free of buildings and roads.
+
+[Style 5] 放射式 / "radial" / "辐射型"
+  → Roads radiate from scene center; buildings line the rays:
+    Step 1: create 4–6 straight roads radiating from (0.00, 0.00) at equal angular intervals
+        (e.g., 6 roads at 0°, 60°, 120°, 180°, 240°, 300°). Road width 7–10m.
+        Each road: start=[0,0], end=[cos(angle)*half_span, sin(angle)*half_span].
+    Step 2: along each ray, place 2–4 buildings at distances 20–100m from center.
+        Position: x = dist*cos(angle), y = dist*sin(angle) (offset ±15m perpendicular to ray).
+    Step 3: building rotation_deg = ray_angle (buildings face outward along the ray).
+    Step 4: each building has DIFFERENT dimensions and unique height.
+    Step 5 (optional): add 1–2 arc/curved roads connecting buildings across rays.
+    CRITICAL: use exact trigonometric formulas for positions; all values 0.01m precision.
+
+[Style 6] 组团式 / "cluster" / "组团"
+  → Multiple compact building clusters separated by open gaps:
+    Step 1: place 3–4 clusters in different quadrants of the scene (e.g., NW/NE/SW/SE positions, ~60–80m from center).
+    Step 2: each cluster contains 3–5 buildings grouped tightly (5–15m between buildings).
+        Buildings within a cluster share approximate orientation (rotation_deg within ±10° of each other).
+    Step 3: between clusters, leave large open gaps (>= 50m clear distance between cluster edges).
+    Step 4: each cluster has 1 short internal road (straight, width 7–10m) running through it.
+        Add 2–3 longer inter-cluster connecting roads linking cluster centers.
+    Step 5: each building has DIFFERENT dimensions and unique height.
+    CRITICAL: intra-cluster density is high; inter-cluster space is wide and empty.
+
+[Style 7] 有机式 / "organic" / "自由式" / "irregular"
+  → Freeform layout with curved roads and irregular building placement:
+    Step 1: create 2–3 curved roads ("curved" type, smooth:true) with 3–5 control points each.
+        Roads wind and curve across the scene. Width 6–10m.
+        Example: [[-80,20],[−40,−10],[0,30],[40,−5],[80,20]] — a gently winding road.
+    Step 2: place 10–15 buildings loosely alongside the roads.
+        Each building has a FULLY RANDOM rotation_deg (0.00–359.99), unique position, unique dimensions.
+        Setback from road edge varies per building (5–15m, randomly assigned).
+    Step 3: no regular pattern — vary heights widely (10–120m), mix building types.
+    Step 4: buildings must not overlap roads (apply road clearance: road_width/2 + setback).
+    CRITICAL: curved road control points must be spaced > 20m apart for smooth curvature.
 
 SPATIAL LAYOUT RULES (CRITICAL for scene generation):
 - Roads run BETWEEN buildings, never THROUGH them

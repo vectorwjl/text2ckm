@@ -206,12 +206,11 @@ def _rand_rt_desc() -> str:
 
 
 # ---------------------------------------------------------------------------
-# 城市街区布局提示词生成
+# 布局风格提示词生成函数
 # ---------------------------------------------------------------------------
 
-def _generate_urban_block_prompt() -> str:
-    """生成触发城市街区布局规则的中文提示词。"""
-    theta = _r(15.0, 50.0)
+def _generate_orthogonal_grid_prompt() -> str:
+    """方格网式：轴对齐街区路网，建筑与坐标轴平行。"""
     n_long = random.choice([2, 3])
     n_trans = random.choice([2, 3])
     long_spacing = _r(50.0, 70.0)
@@ -234,12 +233,222 @@ def _generate_urban_block_prompt() -> str:
     rt_part = _rand_rt_desc()
 
     prompt = (
-        f"创建虚拟场景：按城市街区排列，道路网格整体旋转{theta}度，"
-        f"{n_long}条纵向道路（间距{long_spacing}米）和{n_trans}条横向道路（间距{trans_spacing}米），"
+        f"创建虚拟场景：方格网布局，正交街区路网，"
+        f"{n_long}条南北向纵向道路（间距{long_spacing}米）和{n_trans}条东西向横向道路（间距{trans_spacing}米），"
         f"道路宽{road_width}米，{road_mat_name}材质，"
-        f"每个街区内随机放置{n_per_block}栋{type_name}（{dim_desc}，{height_desc}，{b_mat_name}材质），"
-        f"建筑物朝向与道路一致（旋转角均为{theta}度），同一街区内每栋尺寸各不相同，"
+        f"每个街区内放置{n_per_block}栋{type_name}（{dim_desc}，{height_desc}，{b_mat_name}材质），"
+        f"建筑物朝向与坐标轴平行（旋转角为0度），同一街区内每栋尺寸各不相同，"
         f"距道路边缘至少{setback}米净距，"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+def _generate_slab_row_prompt() -> str:
+    """行列式：平行板式建筑排成整齐行列。"""
+    n_rows = random.randint(3, 4)
+    n_per_row = random.randint(2, 3)
+    row_spacing = _r(30.0, 50.0)
+    bldg_gap = _r(8.0, 15.0)
+    road_width = _r(7.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+    b_mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+    b_mat_name = MATERIAL_NAMES[b_mat]
+
+    # 板式建筑：长宽比 3:1 到 5:1
+    slab_w = _r(8.0, 14.0)
+    slab_l_min = round(slab_w * 3.0, 2)
+    slab_l_max = round(slab_w * 5.0, 2)
+    height_desc = _rand_height_desc()
+
+    # 行方向角度：大多数与轴平行，偶尔略微旋转
+    row_angle = _r(0.0, 5.0) if random.random() < 0.7 else _r(85.0, 95.0)
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：行列式布局，{n_rows}排平行板式矩形建筑，"
+        f"每排{n_per_row}栋，行间距{row_spacing}米，同排建筑间距{bldg_gap}米，"
+        f"每栋建筑宽{slab_w}米、长度在{slab_l_min}到{slab_l_max}米之间（长宽比3:1至5:1），"
+        f"{height_desc}，{b_mat_name}材质，"
+        f"所有建筑朝向一致（旋转角约{row_angle}度），每栋长度各不相同，"
+        f"两条与行方向平行的主要道路贯穿场景（宽{road_width}米，{road_mat_name}材质），"
+        f"加一条垂直于行方向的横向道路，"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+def _generate_point_scatter_prompt() -> str:
+    """点式散布：独立塔楼随机散点分布，道路稀少。"""
+    n_buildings = random.randint(8, 15)
+    all_types = list(BUILDING_TYPE_NAMES.keys())
+    n_type_groups = random.choices([1, 2, 3], weights=[0.4, 0.4, 0.2])[0]
+    selected_types = random.sample(all_types, n_type_groups)
+
+    counts = [1] * n_type_groups
+    for _ in range(n_buildings - n_type_groups):
+        counts[random.randint(0, n_type_groups - 1)] += 1
+
+    group_descs = [
+        _rand_building_group(btype, cnt)
+        for btype, cnt in zip(selected_types, counts)
+    ]
+    building_part = "、".join(group_descs)
+
+    road_width = _r(7.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：点式散布布局，{n_buildings}栋独立塔楼建筑随机散点分布，包括{building_part}，"
+        f"建筑均匀散布在整个场景中，每栋旋转角度各不相同，每栋间距不小于20米，"
+        f"仅设1到2条简单横纵道路（宽{road_width}米，{road_mat_name}材质），"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+def _generate_perimeter_prompt() -> str:
+    """周边式：建筑沿街区周边布置，围合内庭院。"""
+    n_blocks = random.randint(2, 4)
+    block_size = _r(60.0, 100.0)
+    road_width = _r(7.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+    setback = _r(3.0, 5.0)
+
+    # 周边式以U形和L形为主
+    btypes = random.choices(["u_shaped", "l_shaped"], weights=[0.6, 0.4], k=n_blocks)
+    type_names = [BUILDING_TYPE_NAMES[bt] for bt in btypes]
+    height_desc = _rand_height_desc()
+    b_mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+    b_mat_name = MATERIAL_NAMES[b_mat]
+
+    bldg_desc = f"每个街区放置1栋{'或'.join(set(type_names))}围合建筑"
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：周边式围合布局，{n_blocks}个正方形街区（每块约{block_size}米），"
+        f"{bldg_desc}，建筑三面或四面围合内庭院，庭院内部留空，"
+        f"{height_desc}，{b_mat_name}材质，建筑朝向与街区轴线一致，"
+        f"沿街区外侧设置周边道路（宽{road_width}米，{road_mat_name}材质），"
+        f"建筑距道路边缘{setback}米，"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+def _generate_radial_prompt() -> str:
+    """放射式：道路从中心向四周辐射，建筑沿射线排列。"""
+    n_rays = random.choice([4, 5, 6])
+    n_per_ray = random.randint(2, 4)
+    ray_interval = round(360.0 / n_rays, 2)
+    dist_min = _r(20.0, 35.0)
+    dist_max = _r(60.0, 100.0)
+    road_width = _r(7.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+
+    btype = random.choice(list(BUILDING_TYPE_NAMES.keys()))
+    type_name = BUILDING_TYPE_NAMES[btype]
+    dim_desc = _DIM_DESC_FUNCS[btype]()
+    height_desc = _rand_height_desc()
+    b_mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+    b_mat_name = MATERIAL_NAMES[b_mat]
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：放射式布局，{n_rays}条道路从场景中心向外辐射延伸"
+        f"（每条间隔约{ray_interval}度），道路宽{road_width}米，{road_mat_name}材质，"
+        f"沿每条射线在距中心{dist_min}到{dist_max}米范围内排列{n_per_ray}栋{type_name}，"
+        f"（{dim_desc}，{height_desc}，{b_mat_name}材质），"
+        f"每栋建筑旋转角度与所在射线方向一致，各栋尺寸各不相同，"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+def _generate_cluster_prompt() -> str:
+    """组团式：多个独立建筑组团分散布置。"""
+    n_clusters = random.choice([3, 4])
+    n_per_cluster = random.randint(3, 5)
+    cluster_gap = _r(10.0, 15.0)
+    inter_gap = _r(50.0, 80.0)
+    road_width = _r(7.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+    b_mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+    b_mat_name = MATERIAL_NAMES[b_mat]
+
+    # 各组团使用不同或相同建筑类型
+    all_types = list(BUILDING_TYPE_NAMES.keys())
+    cluster_type = random.choice(all_types)
+    type_name = BUILDING_TYPE_NAMES[cluster_type]
+    dim_desc = _DIM_DESC_FUNCS[cluster_type]()
+    height_desc = _rand_height_desc()
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：组团式布局，{n_clusters}个独立建筑组团分散分布在场景各象限，"
+        f"每组团{n_per_cluster}栋{type_name}（{dim_desc}，{height_desc}，{b_mat_name}材质），"
+        f"组团内建筑紧凑排列（间距{cluster_gap}米），组团间距至少{inter_gap}米，"
+        f"同一组团内建筑朝向相近（旋转角相差不超过15度），各栋尺寸各不相同，"
+        f"每个组团内设一条短道路（宽{road_width}米，{road_mat_name}材质），"
+        f"加{n_clusters - 1}条组团间连接主道路，"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+def _generate_organic_prompt() -> str:
+    """有机式：曲线道路，建筑自由不规则排列。"""
+    n_buildings = random.randint(10, 15)
+    all_types = list(BUILDING_TYPE_NAMES.keys())
+    n_type_groups = random.choices([2, 3], weights=[0.5, 0.5])[0]
+    selected_types = random.sample(all_types, n_type_groups)
+
+    counts = [1] * n_type_groups
+    for _ in range(n_buildings - n_type_groups):
+        counts[random.randint(0, n_type_groups - 1)] += 1
+
+    group_descs = [
+        _rand_building_group(btype, cnt)
+        for btype, cnt in zip(selected_types, counts)
+    ]
+    building_part = "、".join(group_descs)
+
+    road_width = _r(6.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+    n_roads = random.choice([2, 3])
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：有机自由式布局，{n_buildings}栋建筑不规则散布，包括{building_part}，"
+        f"建筑位置无规律、旋转角度完全随机（各不相同），高度和尺寸变化丰富，"
+        f"设置{n_roads}条蜿蜒弯曲的曲线道路（smooth曲线，每条至少3个控制点），"
+        f"道路宽{road_width}米，{road_mat_name}材质，建筑松散地分布在道路两侧，"
+        f"退距各不相同（5到15米随机），"
         f"{tx_part}，{rx_part}，{rt_part}"
     )
     return prompt
@@ -249,61 +458,23 @@ def _generate_urban_block_prompt() -> str:
 # 完整提示词生成
 # ---------------------------------------------------------------------------
 
+# 7种布局风格及其采样权重
+_STYLE_GENERATORS = [
+    (_generate_orthogonal_grid_prompt, 0.20),
+    (_generate_slab_row_prompt,        0.15),
+    (_generate_point_scatter_prompt,   0.15),
+    (_generate_perimeter_prompt,       0.15),
+    (_generate_radial_prompt,          0.10),
+    (_generate_cluster_prompt,         0.15),
+    (_generate_organic_prompt,         0.10),
+]
+
+
 def generate_random_prompt() -> str:
-    """生成一条完整的随机中文场景提示词（40% 概率为城市街区布局）。"""
-    if random.random() < 0.40:
-        return _generate_urban_block_prompt()
-
-    all_types = list(BUILDING_TYPE_NAMES.keys())
-
-    # 决定类型组合数量
-    n_type_groups = random.choices([1, 2, 3], weights=[0.50, 0.35, 0.15])[0]
-    selected_types = random.sample(all_types, n_type_groups)
-
-    # 决定总建筑数，并分配到各类型
-    total_buildings = random.randint(3, 15)
-    if n_type_groups == 1:
-        counts = [total_buildings]
-    else:
-        # 保证每组至少 1 栋
-        counts = [1] * n_type_groups
-        remaining = total_buildings - n_type_groups
-        for i in range(remaining):
-            counts[random.randint(0, n_type_groups - 1)] += 1
-
-    # 道路数量
-    n_roads = random.randint(1, 3)
-
-    # 组装建筑描述
-    if n_type_groups == 1:
-        btype = selected_types[0]
-        type_name = BUILDING_TYPE_NAMES[btype]
-        dim_desc = _DIM_DESC_FUNCS[btype]()
-        height_desc = _rand_height_desc()
-        mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
-        mat_name = MATERIAL_NAMES[mat]
-        building_part = (
-            f"在场景中心周围随机放置{total_buildings}栋{type_name}，"
-            f"{dim_desc}，{height_desc}，材质为{mat_name}，"
-            f"每栋旋转角度各不相同（0-360度随机），每栋{type_name}的外形尺寸参数各不相同"
-        )
-    else:
-        group_descs = [
-            _rand_building_group(btype, cnt)
-            for btype, cnt in zip(selected_types, counts)
-        ]
-        building_part = (
-            f"在场景中心周围随机放置{total_buildings}栋建筑，包括"
-            + "、".join(group_descs)
-        )
-
-    road_part = f"在建筑间创建{_rand_road_desc(n_roads)}"
-    tx_part = _rand_tx_desc()
-    rx_part = _rand_rx_desc()
-    rt_part = _rand_rt_desc()
-
-    prompt = f"创建虚拟场景：{building_part}，{road_part}，{tx_part}，{rx_part}，{rt_part}"
-    return prompt
+    """从7种布局风格中随机选取一种，生成对应的完整中文场景提示词。"""
+    generators, weights = zip(*_STYLE_GENERATORS)
+    chosen = random.choices(generators, weights=weights, k=1)[0]
+    return chosen()
 
 
 # ---------------------------------------------------------------------------
