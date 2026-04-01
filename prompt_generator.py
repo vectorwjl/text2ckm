@@ -227,11 +227,54 @@ def _rand_rt_desc() -> str:
 
 
 # ---------------------------------------------------------------------------
+# 城市街区布局提示词生成
+# ---------------------------------------------------------------------------
+
+def _generate_urban_block_prompt() -> str:
+    """生成触发城市街区布局规则的中文提示词。"""
+    theta = _r(15.0, 50.0)
+    n_long = random.choice([2, 3])
+    n_trans = random.choice([2, 3])
+    long_spacing = _r(50.0, 70.0)
+    trans_spacing = _r(45.0, 65.0)
+    road_width = _r(7.0, 10.0)
+    road_mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
+    road_mat_name = MATERIAL_NAMES[road_mat]
+    n_per_block = random.randint(2, 4)
+    setback = _r(4.0, 6.0)
+
+    btype = random.choice(list(BUILDING_TYPE_NAMES.keys()))
+    type_name = BUILDING_TYPE_NAMES[btype]
+    dim_desc = _DIM_DESC_FUNCS[btype]()
+    height_desc = _rand_height_desc()
+    b_mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
+    b_mat_name = MATERIAL_NAMES[b_mat]
+
+    tx_part = _rand_tx_desc()
+    rx_part = _rand_rx_desc()
+    rt_part = _rand_rt_desc()
+
+    prompt = (
+        f"创建虚拟场景：按城市街区排列，道路网格整体旋转{theta}度，"
+        f"{n_long}条纵向道路（间距{long_spacing}米）和{n_trans}条横向道路（间距{trans_spacing}米），"
+        f"道路宽{road_width}米，{road_mat_name}材质，"
+        f"每个街区内随机放置{n_per_block}栋{type_name}（{dim_desc}，{height_desc}，{b_mat_name}材质），"
+        f"建筑物朝向与道路一致（旋转角均为{theta}度），同一街区内每栋尺寸各不相同，"
+        f"距道路边缘至少{setback}米净距，"
+        f"{tx_part}，{rx_part}，{rt_part}"
+    )
+    return prompt
+
+
+# ---------------------------------------------------------------------------
 # 完整提示词生成
 # ---------------------------------------------------------------------------
 
 def generate_random_prompt() -> str:
-    """生成一条完整的随机中文场景提示词。"""
+    """生成一条完整的随机中文场景提示词（40% 概率为城市街区布局）。"""
+    if random.random() < 0.40:
+        return _generate_urban_block_prompt()
+
     all_types = list(BUILDING_TYPE_NAMES.keys())
 
     # 决定类型组合数量

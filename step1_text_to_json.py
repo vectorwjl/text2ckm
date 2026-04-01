@@ -91,6 +91,37 @@ EXAMPLES:
     CRITICAL: generate EXACTLY N buildings — no more, no less. All coordinates (x, y), dimensions (width, length, height), and rotation_deg MUST be floating-point numbers with 2 decimal places, NOT integers.
     {"intent": "scene_generation", "scene": {"buildings": [/* exactly N buildings, each with unique random position, dimensions, height, and rotation_deg */], "roads": [/* complex multi-road network */]}, "confidence": 0.9, "explanation": "N栋建筑完全随机放置，每栋独立随机尺寸和旋转角，复杂路网"}
 
+- "城市街区布局" / "按街区排列" / "urban block" / "city block layout"
+  → URBAN BLOCK LAYOUT RULE — follow these steps precisely:
+    Step 1: choose grid rotation angle θ (15.00°–50.00°, e.g., 32.00°). Convert to radians for math.
+    Step 2: compute unit vectors (use full float precision):
+        along = (cos(θ°), sin(θ°))   — road longitudinal direction
+        perp  = (-sin(θ°), cos(θ°))  — road perpendicular direction
+    Step 3: build the rotated road network (all roads same width = 7–10m):
+      Longitudinal roads (run in 'along' direction, spaced in 'perp' direction):
+        Use 2–3 roads; offsets k ∈ {-1,0,+1} or {-0.5,+0.5} × long_spacing (50–70m).
+        Road_start = (0,0) + k*long_spacing*perp − half_span*along
+        Road_end   = (0,0) + k*long_spacing*perp + half_span*along
+        where half_span = map_size/2 + 20 (roads extend slightly past map edge)
+      Transverse roads (run in 'perp' direction, spaced in 'along' direction):
+        Use 2–3 roads; offsets m × trans_spacing (45–65m).
+        Road_start = (0,0) + m*trans_spacing*along − half_span*perp
+        Road_end   = (0,0) + m*trans_spacing*along + half_span*perp
+    Step 4: identify city blocks — each block is the rectangle bounded by 2 adjacent
+        longitudinal roads and 2 adjacent transverse roads.
+        Block center = average of its 4 bounding road centerlines.
+    Step 5: fill EACH block with 2–4 buildings:
+        - All buildings in the SAME block share rotation_deg = θ (aligned with road grid)
+        - Arrange buildings in a row (along the 'along' axis) or 2×2 grid within the block
+        - Building center position: apply setback from each bordering road centerline:
+            dist_to_road_centerline >= road_width/2 + setback  (setback = 4.00–6.00m)
+        - Between adjacent buildings in a block: gap = 2.00–5.00m
+        - Each building must have DIFFERENT dimensions from all others (vary ±3–8m)
+        - Heights vary per building (unique float, 0.01m precision)
+    Step 6 (optional): add 1 diagonal road at angle θ+45° passing through scene center.
+    CRITICAL: compute all road endpoint coordinates using the exact vector formulas above.
+        All values use 0.01m precision. Setback rule must be satisfied for every building.
+
 SPATIAL LAYOUT RULES (CRITICAL for scene generation):
 - Roads run BETWEEN buildings, never THROUGH them
 - Every building must have clearance from any road edge: clearance >= road_width/2 + 5m
