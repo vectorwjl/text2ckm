@@ -160,26 +160,49 @@ _DIM_DESC_FUNCS = {
 # ---------------------------------------------------------------------------
 
 def _rand_building_group(btype: str, count: int) -> str:
-    """生成一组同类型建筑的完整中文描述片段。"""
+    """生成一组同类型建筑的完整中文描述片段（含旋转和尺寸差异要求）。"""
     type_name = BUILDING_TYPE_NAMES[btype]
     dim_desc = _DIM_DESC_FUNCS[btype]()
     height_desc = _rand_height_desc()
     mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
     mat_name = MATERIAL_NAMES[mat]
-    return f"{count}栋{type_name}（{dim_desc}，{height_desc}，{mat_name}材质）"
+    return (
+        f"{count}栋{type_name}（{dim_desc}，{height_desc}，{mat_name}材质，"
+        f"每栋旋转角度各不相同（0-360度随机），每栋{type_name}的外形尺寸参数各不相同）"
+    )
 
 
 # ---------------------------------------------------------------------------
-# 道路描述
+# 道路描述（8 种路网模板）
 # ---------------------------------------------------------------------------
 
-def _rand_road_desc(n_roads: int) -> str:
-    """生成道路描述片段。"""
-    rtype = random.choices(["直线", "曲线"], weights=[0.8, 0.2])[0]
+def _rand_road_desc(_ignored: int = 0) -> str:
+    """从 8 种复杂路网模板中随机选取一种生成道路描述。"""
     width = _r(6.0, 12.0)
     mat = _weighted_choice(ROAD_MATERIAL_WEIGHTS)
     mat_name = MATERIAL_NAMES[mat]
-    return f"{n_roads}条{rtype}道路（宽{width}米，{mat_name}材质）"
+    w = width
+    m = mat_name
+
+    templates = [
+        # 0: 错位双十字网格
+        f"两条东西向横道（Y轴偏移不同，间距随机）加两条南北向纵道（X轴偏移不同），共4条直线道路，宽{w}米，形成错位网格路网，{m}材质",
+        # 1: 斜向+正交混合
+        f"一条水平直道、一条纵向直道加一条约45度斜向道路，共3条，宽{w}米，{m}材质",
+        # 2: 放射状四叉
+        f"从场景中心向4个不同方向（约0°/50°/100°/160°）放射延伸的4条直道，宽{w}米，{m}材质",
+        # 3: 城市街区网格
+        f"城市街区路网：3条东西向横道（间距不等）加2条南北向纵道（间距不等），共5条直线道路，宽{w}米，{m}材质",
+        # 4: Y形三叉
+        f"Y形三叉路口：3条直道以约120度夹角从中心延伸至场景边缘，宽{w}米，{m}材质",
+        # 5: 弧形+直道组合
+        f"一条弧形曲线道路绕过建筑群一侧（smooth曲线，3个控制点），加两条相互错开的直线干道，共3段道路，宽{w}米，{m}材质",
+        # 6: 折线+直道混合
+        f"两条含转折点的折线道路（各含2个弯角，角度约30-60度）加一条横贯场景的直道，共3段，宽{w}米，{m}材质",
+        # 7: 菱形对角网格
+        f"两条平行斜向道路（约30度倾斜）加两条水平直道，共4条，形成菱形路网，宽{w}米，{m}材质",
+    ]
+    return random.choice(templates)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +262,8 @@ def generate_random_prompt() -> str:
         mat_name = MATERIAL_NAMES[mat]
         building_part = (
             f"在场景中心周围随机放置{total_buildings}栋{type_name}，"
-            f"{dim_desc}，{height_desc}，材质为{mat_name}"
+            f"{dim_desc}，{height_desc}，材质为{mat_name}，"
+            f"每栋旋转角度各不相同（0-360度随机），每栋{type_name}的外形尺寸参数各不相同"
         )
     else:
         group_descs = [
