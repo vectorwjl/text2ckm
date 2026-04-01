@@ -283,6 +283,7 @@ def main():
         y = float(b.get("y", 0))
         height = float(b.get("height", 10))
         material = b.get("material", "concrete")
+        rotation_deg = float(b.get("rotation_deg", 0.0))
 
         try:
             if btype == "rectangular":
@@ -314,6 +315,11 @@ def main():
             else:
                 print(f"[blender_script] Unknown building type '{btype}', skipping.")
                 continue
+
+            if abs(rotation_deg) > 0.01:
+                obj.rotation_euler[2] = math.radians(rotation_deg)
+                _select_only(obj)
+                bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
             _triangulate(obj)
             ply_path = str(mesh_dir / f"building_{i}.ply")

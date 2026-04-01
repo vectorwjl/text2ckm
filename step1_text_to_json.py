@@ -26,13 +26,13 @@ SUPPORTED PARAMETERS:
 5. VIRTUAL SCENE GENERATION:
    When user uses keywords like "生成虚拟场景", "创建场景", "generate scene", "create virtual scene", extract scene description:
 
-   BUILDING TYPES:
-   - rectangular: Basic box building (width, length, height)
-   - cylindrical: Round tower (radius, height)
-   - l_shaped: L-shaped building (width1, length1, width2, length2, height)
-   - t_shaped: T-shaped commercial complex (main_width, main_length, wing_width, wing_length, height)
-   - u_shaped: U-shaped courtyard building (outer_width, outer_length, inner_width, inner_length, height)
-   - ring: Ring-shaped stadium (outer_radius, inner_radius, height)
+   BUILDING TYPES (all support optional rotation_deg: float 0–360, degrees around Z-axis, default 0):
+   - rectangular: Basic box building (width, length, height, rotation_deg)
+   - cylindrical: Round tower (radius, height, rotation_deg)
+   - l_shaped: L-shaped building (width1, length1, width2, length2, height, rotation_deg)
+   - t_shaped: T-shaped commercial complex (main_width, main_length, wing_width, wing_length, height, rotation_deg)
+   - u_shaped: U-shaped courtyard building (outer_width, outer_length, inner_width, inner_length, height, rotation_deg)
+   - ring: Ring-shaped stadium (outer_radius, inner_radius, height, rotation_deg)
 
    ROAD TYPES:
    - straight: Straight road (start, end, width)
@@ -85,10 +85,11 @@ EXAMPLES:
     Step 1: determine map bounds (default ±80m from center if not specified).
     Step 2: for each building, generate a UNIQUE random position (x, y) within map bounds, with 0.01m precision (2 decimal places). Do NOT use a fixed grid formula — every run must produce different coordinates.
     Step 3: ensure minimum clearance between every pair of buildings: distance between centers >= max(width,length) of each + 5m.
-    Step 4: assign random heights with 0.01m precision (e.g., 52.37, 78.14, 63.89). Do NOT use round integers.
-    Step 5: place 1-2 straight roads passing between the buildings (not through them), width=8.
-    CRITICAL: generate EXACTLY N buildings — no more, no less. All coordinates (x, y) and dimensions (width, length, height) MUST be floating-point numbers with 2 decimal places, NOT integers.
-    {"intent": "scene_generation", "scene": {"buildings": [/* exactly N buildings, random float positions and heights */], "roads": [/* roads between buildings */]}, "confidence": 0.9, "explanation": "N栋建筑完全随机放置，坐标和高度均为0.01m精度的小数"}
+    Step 4: assign UNIQUE random heights AND unique dimensions per building. For N buildings of the same type, each one must have individually different width/length/radius values (vary by at least ±2m). Do NOT reuse the same dimensions across buildings.
+    Step 4b: assign a UNIQUE random rotation_deg (0.00–359.99) to EACH building individually. No two buildings should share the same rotation value.
+    Step 5: roads form a COMPLEX network — do NOT create a simple single cross or X. Use at least 2 of the following: parallel roads at different offsets, roads at non-90° angles, curved roads, staggered T-intersections, diagonal roads. Example: 2 horizontal roads at different Y positions + 1 diagonal road + 1 curved road.
+    CRITICAL: generate EXACTLY N buildings — no more, no less. All coordinates (x, y), dimensions (width, length, height), and rotation_deg MUST be floating-point numbers with 2 decimal places, NOT integers.
+    {"intent": "scene_generation", "scene": {"buildings": [/* exactly N buildings, each with unique random position, dimensions, height, and rotation_deg */], "roads": [/* complex multi-road network */]}, "confidence": 0.9, "explanation": "N栋建筑完全随机放置，每栋独立随机尺寸和旋转角，复杂路网"}
 
 SPATIAL LAYOUT RULES (CRITICAL for scene generation):
 - Roads run BETWEEN buildings, never THROUGH them
@@ -110,6 +111,9 @@ RULES:
 - Support both English and Chinese queries
 - Return ONLY valid JSON, no markdown formatting
 - PRECISION: All spatial coordinates (x, y, z) and dimensions (width, length, height, radius, etc.) MUST use floating-point numbers with 2 decimal places (0.01m grid resolution). NEVER use plain integers for these values. Examples: use 32.47 not 32, use -15.83 not -15, use 8.00 not 8.
+- ROTATION: Every building must have a rotation_deg field (float, 0.01 precision, 0–360). Each building's rotation_deg must be different from all others.
+- DIMENSION DIVERSITY: For N buildings of the same type, every building must have individually different geometric dimensions (width, length, radius, etc.) — never copy the same values across buildings.
+- ROAD COMPLEXITY: Always create a multi-road network. Avoid single cross/X layouts. Combine roads at different angles, offsets, or use curved roads to create a realistic urban road network.
 
 RESPONSE FORMAT (JSON only):
 {

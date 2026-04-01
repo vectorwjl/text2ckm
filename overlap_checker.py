@@ -10,6 +10,7 @@ overlap_checker.py — 检测场景 JSON 中建筑物与道路的 2D 水平投�
 
 from shapely.geometry import box, Point, LineString, Polygon
 from shapely.geometry import JOIN_STYLE
+from shapely import affinity
 import math
 
 
@@ -41,7 +42,7 @@ def _desc_building(idx: int, b: dict) -> str:
 
 
 def building_to_polygon(b: dict) -> Polygon:
-    """将任意建筑类型转换为 Shapely 2D 多边形（水平投影）。"""
+    """将任意建筑类型转换为 Shapely 2D 多边形（水平投影，含旋转）。"""
     btype = b.get("type", "rectangular")
     x = float(b.get("x", 0))
     y = float(b.get("y", 0))
@@ -49,11 +50,11 @@ def building_to_polygon(b: dict) -> Polygon:
     if btype == "rectangular":
         w = float(b.get("width", 10))
         l = float(b.get("length", b.get("width", 10)))
-        return box(x - w / 2, y - l / 2, x + w / 2, y + l / 2)
+        poly = box(x - w / 2, y - l / 2, x + w / 2, y + l / 2)
 
     elif btype == "cylindrical":
         r = float(b.get("radius", 5))
-        return Point(x, y).buffer(r, resolution=32)
+        poly = Point(x, y).buffer(r, resolution=32)
 
     elif btype == "l_shaped":
         w1 = float(b.get("width1", 10))
@@ -64,7 +65,7 @@ def building_to_polygon(b: dict) -> Polygon:
         wing_cx = x + w1 / 2 + w2 / 2
         wing_cy = y - l1 / 2 + l2 / 2
         wing = box(wing_cx - w2 / 2, wing_cy - l2 / 2, wing_cx + w2 / 2, wing_cy + l2 / 2)
-        return main.union(wing)
+        poly = main.union(wing)
 
     elif btype == "t_shaped":
         mw = float(b.get("main_width", 20))
@@ -78,7 +79,7 @@ def building_to_polygon(b: dict) -> Polygon:
         right_cx = x + mw / 2 + ww / 2
         right_cy = y + ml / 2 - wl / 2
         right = box(right_cx - ww / 2, right_cy - wl / 2, right_cx + ww / 2, right_cy + wl / 2)
-        return main.union(left).union(right)
+        poly = main.union(left).union(right)
 
     elif btype == "u_shaped":
         ow = float(b.get("outer_width", 40))
@@ -89,17 +90,22 @@ def building_to_polygon(b: dict) -> Polygon:
         inner_cy = y + (ol - il) / 2
         inner = box(x - iw / 2, inner_cy - il / 2, x + iw / 2, inner_cy + il / 2)
         result = outer.difference(inner)
-        return result if not result.is_empty else outer
+        poly = result if not result.is_empty else outer
 
     elif btype == "ring":
         outer_r = float(b.get("outer_radius", 15))
         inner_r = float(b.get("inner_radius", 8))
         outer = Point(x, y).buffer(outer_r, resolution=32)
         inner = Point(x, y).buffer(inner_r, resolution=32)
-        return outer.difference(inner)
+        poly = outer.difference(inner)
 
-    # 未知类型：用保守的外接圆
-    return Point(x, y).buffer(10.0, resolution=16)
+    else:
+        poly = Point(x, y).buffer(10.0, resolution=16)
+
+    rotation_deg = float(b.get("rotation_deg", 0.0))
+    if abs(rotation_deg) > 0.01:
+        poly = affinity.rotate(poly, rotation_deg, origin=(x, y))
+    return poly
 
 
 # ---------------------------------------------------------------------------
