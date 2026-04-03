@@ -1,0 +1,37 @@
+{
+  "intent": "scene_generation",
+  "scene": {
+    "buildings": [
+      {
+        "type": "u_shaped",
+        "x": -65.00, "y": 0.00,
+        "height": 18.00,
+        "outer_width": 52.00, "outer_length": 52.00,
+        "inner_width": 30.00, "inner_length": 30.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "u_shaped",
+        "x": 65.00, "y": 0.00,
+        "height": 22.50,
+        "outer_width": 56.00, "outer_length": 48.00,
+        "inner_width": 31.00, "inner_length": 27.00,
+        "material": "concrete",
+        "rotation_deg": 0.01
+      }
+    ],
+    "roads": [
+      {"type": "straight", "start": [-115.00,  35.00], "end": [115.00,  35.00], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [-115.00, -35.00], "end": [115.00, -35.00], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [-100.00, -55.00], "end": [-100.00, 55.00], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [   0.00, -55.00], "end": [   0.00, 55.00], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [ 100.00, -55.00], "end": [ 100.00, 55.00], "width": 9.00, "material": "marble"}
+    ]
+  },
+  "tx": {"power_dbm": 30.00, "frequency_ghz": 3.50, "z": 12.00},
+  "rx": {"rx_height": 1.50},
+  "rt": {"map_size_m": 260.00},
+  "confidence": 0.91,
+  "explanation": "周边式围合布局：2个街区，每块一栋U形建筑三面围合内庭院，内庭院完全留空，外围道路包围街区。"
+}

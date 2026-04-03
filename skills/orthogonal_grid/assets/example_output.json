@@ -1,0 +1,130 @@
+{
+  "intent": "scene_generation",
+  "scene": {
+    "buildings": [
+      {
+        "type": "rectangular",
+        "x": -27.00,
+        "y": -20.00,
+        "height": 18.00,
+        "width": 14.00,
+        "length": 20.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": -8.00,
+        "y": -20.00,
+        "height": 24.00,
+        "width": 16.00,
+        "length": 23.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": 27.00,
+        "y": -20.00,
+        "height": 30.00,
+        "width": 12.00,
+        "length": 18.00,
+        "material": "glass",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": 10.00,
+        "y": -20.00,
+        "height": 21.00,
+        "width": 10.00,
+        "length": 16.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": -27.00,
+        "y": 20.00,
+        "height": 15.00,
+        "width": 13.00,
+        "length": 19.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": -8.00,
+        "y": 20.00,
+        "height": 27.00,
+        "width": 15.00,
+        "length": 22.00,
+        "material": "metal",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": 10.00,
+        "y": 20.00,
+        "height": 33.00,
+        "width": 11.00,
+        "length": 17.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      },
+      {
+        "type": "rectangular",
+        "x": 27.00,
+        "y": 20.00,
+        "height": 12.00,
+        "width": 9.00,
+        "length": 15.00,
+        "material": "concrete",
+        "rotation_deg": 0.00
+      }
+    ],
+    "roads": [
+      {
+        "type": "straight",
+        "start": [-50.00, -120.00],
+        "end":   [-50.00,  120.00],
+        "width": 8.00,
+        "material": "marble"
+      },
+      {
+        "type": "straight",
+        "start": [ 50.00, -120.00],
+        "end":   [ 50.00,  120.00],
+        "width": 8.00,
+        "material": "marble"
+      },
+      {
+        "type": "straight",
+        "start": [-120.00, -45.00],
+        "end":   [ 120.00, -45.00],
+        "width": 8.00,
+        "material": "marble"
+      },
+      {
+        "type": "straight",
+        "start": [-120.00,  45.00],
+        "end":   [ 120.00,  45.00],
+        "width": 8.00,
+        "material": "marble"
+      }
+    ]
+  },
+  "tx": {
+    "power_dbm": 30,
+    "frequency_ghz": 3.5,
+    "z": 10.0
+  },
+  "rx": {
+    "rx_height": 1.5
+  },
+  "rt": {
+    "map_size_m": 250.0
+  },
+  "confidence": 0.9,
+  "explanation": "Generated orthogonal grid scene: 2 south-north roads at x=-50.00 and x=+50.00, 2 east-west roads at y=-45.00 and y=+45.00, forming 4 blocks each containing 2 axis-aligned rectangular buildings (rotation_deg=0.00) with unique dimensions and heights."
+}
