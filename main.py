@@ -6,14 +6,17 @@ import json
 import os
 from pathlib import Path
 
-from step1_text_to_json import text_to_scene_json
+from step1_text_to_json import text_to_scene_json, detect_style, SKILLS_DIR
 from step2_json_to_scene import generate_scene
 from step3_render_topdown import render_topdown
 from step4_path_gain import generate_path_gain
 from overlap_checker import check_overlaps, format_overlap_feedback
+from scene_evaluator import evaluate_scene, summarize_and_update
 
 MAX_OVERLAP_RETRIES = 3
 EXAMPLE_JSON_DIR = Path("example_json")
+EVAL_LOG_PATH = Path("evaluation_log.json")
+CLEAN_SCENES_PER_SUMMARY = 10
 
 
 def main():
@@ -21,6 +24,13 @@ def main():
     if not txt_files:
         print("[main] No .txt files found in text_prompts/")
         return
+
+    # 读取历史评分日志（跨次运行持久化）
+    eval_log: list = (
+        json.loads(EVAL_LOG_PATH.read_text(encoding="utf-8"))
+        if EVAL_LOG_PATH.exists()
+        else []
+    )
 
     for txt_file in txt_files:
         name = txt_file.stem
@@ -38,6 +48,36 @@ def main():
             result = text_to_scene_json(retry_text)
             scene_check = result.get("scene", {})
             overlaps = check_overlaps(scene_check)
+
+            # AI-2：每次 attempt 后评分（含重叠场景）
+            eval_result = evaluate_scene(
+                original_prompt=text,
+                scene_data=result.get("scene", {}),
+                overlaps=overlaps,
+                attempt=attempt + 1,
+            )
+            score_str = (
+                f"{eval_result.get('overall_score')}/10.0"
+                if eval_result.get("overall_score") is not None
+                else "N/A"
+            )
+            print(f"[AI-2] 评分: {score_str}  摘要: {eval_result.get('summary', '')}")
+            eval_log.append({
+                "name": name,
+                "attempt": attempt + 1,
+                "style": detect_style(text),
+                "has_overlaps": bool(overlaps),
+                "overlap_count": len(overlaps),
+                "score": eval_result.get("overall_score"),
+                "metrics": eval_result.get("metrics", {}),
+                "summary": eval_result.get("summary", ""),
+                "key_issues": eval_result.get("key_issues", []),
+                "strengths": eval_result.get("strengths", []),
+            })
+            EVAL_LOG_PATH.write_text(
+                json.dumps(eval_log, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
             if not overlaps:
                 has_final_overlaps = False
                 if attempt > 0:
@@ -84,6 +124,17 @@ def main():
                 encoding="utf-8",
             )
             print(f"[main] 无重叠，JSON已保存至示例目录: {example_path}")
+
+            # AI-2：每 10 个干净场景触发汇总并更新 AI-1 的 system_prompt
+            clean_evals = [e for e in eval_log if not e.get("has_overlaps", True)]
+            total_clean = len(clean_evals)
+            if total_clean > 0 and total_clean % CLEAN_SCENES_PER_SUMMARY == 0:
+                print(f"[AI-2] 已积累 {total_clean} 个干净场景，触发汇总并更新 system_prompt...")
+                try:
+                    summarize_and_update(clean_evals[-CLEAN_SCENES_PER_SUMMARY:], SKILLS_DIR)
+                    print("[AI-2] system_prompt 更新完成。")
+                except Exception as exc:
+                    print(f"[AI-2] WARNING: 汇总更新失败 — {exc}")
         else:
             print(f"[main] 最终仍有重叠，跳过 example_json/。")
 
