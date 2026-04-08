@@ -13,6 +13,7 @@ from step4_path_gain import generate_path_gain
 from overlap_checker import check_overlaps, format_overlap_feedback
 
 MAX_OVERLAP_RETRIES = 3
+EXAMPLE_JSON_DIR = Path("example_json")
 
 
 def main():
@@ -31,12 +32,14 @@ def main():
         text = txt_file.read_text(encoding="utf-8")
         retry_text = text
         result = None
+        has_final_overlaps = True
         for attempt in range(MAX_OVERLAP_RETRIES + 1):
             print(f"[main] Calling DeepSeek API (attempt {attempt + 1}/{MAX_OVERLAP_RETRIES + 1})...")
             result = text_to_scene_json(retry_text)
             scene_check = result.get("scene", {})
             overlaps = check_overlaps(scene_check)
             if not overlaps:
+                has_final_overlaps = False
                 if attempt > 0:
                     print(f"[main] Overlaps resolved on attempt {attempt + 1}.")
                 else:
@@ -45,7 +48,13 @@ def main():
             if attempt < MAX_OVERLAP_RETRIES:
                 feedback = format_overlap_feedback(overlaps)
                 print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
-                retry_text = text + "\n\n" + feedback
+                scene_json_str = json.dumps(result.get("scene", {}), ensure_ascii=False, indent=2)
+                retry_text = (
+                    text + "\n\n"
+                    + "=== 当前生成的场景JSON（所有建筑/道路坐标，供参考）===\n"
+                    + scene_json_str + "\n\n"
+                    + feedback
+                )
             else:
                 print(f"[main] WARNING: {len(overlaps)} overlap(s) remain after {MAX_OVERLAP_RETRIES} retries. Proceeding anyway.")
 
@@ -66,6 +75,17 @@ def main():
         } if result.get("scene") else result
         json_path.write_text(json.dumps(result_with_material, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[main] JSON saved: {json_path}")
+
+        if not has_final_overlaps:
+            EXAMPLE_JSON_DIR.mkdir(exist_ok=True)
+            example_path = EXAMPLE_JSON_DIR / f"{name}.json"
+            example_path.write_text(
+                json.dumps(result_with_material, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[main] 无重叠，JSON已保存至示例目录: {example_path}")
+        else:
+            print(f"[main] 最终仍有重叠，跳过 example_json/。")
 
         scene_data = result.get("scene", {"buildings": [], "roads": []})
         tx_params = result.get("tx", {})
