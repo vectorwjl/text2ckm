@@ -13,7 +13,6 @@ from step4_path_gain import generate_path_gain
 from overlap_checker import check_overlaps, format_overlap_feedback
 from scene_evaluator import evaluate_scene, summarize_and_update
 
-MAX_OVERLAP_RETRIES = 3
 EXAMPLE_JSON_DIR = Path("example_json")
 EVAL_LOG_PATH = Path("evaluation_log.json")
 CLEAN_SCENES_PER_SUMMARY = 10
@@ -42,9 +41,9 @@ def main():
         text = txt_file.read_text(encoding="utf-8")
         retry_text = text
         result = None
-        has_final_overlaps = True
-        for attempt in range(MAX_OVERLAP_RETRIES + 1):
-            print(f"[main] Calling DeepSeek API (attempt {attempt + 1}/{MAX_OVERLAP_RETRIES + 1})...")
+        attempt = 0
+        while True:
+            print(f"[main] Calling DeepSeek API (attempt {attempt + 1})...")
             result = text_to_scene_json(retry_text)
             scene_check = result.get("scene", {})
             overlaps = check_overlaps(scene_check)
@@ -79,24 +78,23 @@ def main():
             )
 
             if not overlaps:
-                has_final_overlaps = False
                 if attempt > 0:
                     print(f"[main] Overlaps resolved on attempt {attempt + 1}.")
                 else:
                     print(f"[main] No overlaps detected.")
                 break
-            if attempt < MAX_OVERLAP_RETRIES:
-                feedback = format_overlap_feedback(overlaps)
-                print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
-                scene_json_str = json.dumps(result.get("scene", {}), ensure_ascii=False, indent=2)
-                retry_text = (
-                    text + "\n\n"
-                    + "=== 当前生成的场景JSON（所有建筑/道路坐标，供参考）===\n"
-                    + scene_json_str + "\n\n"
-                    + feedback
-                )
-            else:
-                print(f"[main] WARNING: {len(overlaps)} overlap(s) remain after {MAX_OVERLAP_RETRIES} retries. Proceeding anyway.")
+
+            # 有重叠则继续重试（无上限）
+            feedback = format_overlap_feedback(overlaps)
+            print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
+            scene_json_str = json.dumps(result.get("scene", {}), ensure_ascii=False, indent=2)
+            retry_text = (
+                text + "\n\n"
+                + "=== 当前生成的场景JSON（所有建筑/道路坐标，供参考）===\n"
+                + scene_json_str + "\n\n"
+                + feedback
+            )
+            attempt += 1
 
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)
@@ -116,27 +114,25 @@ def main():
         json_path.write_text(json.dumps(result_with_material, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[main] JSON saved: {json_path}")
 
-        if not has_final_overlaps:
-            EXAMPLE_JSON_DIR.mkdir(exist_ok=True)
-            example_path = EXAMPLE_JSON_DIR / f"{name}.json"
-            example_path.write_text(
-                json.dumps(result_with_material, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            print(f"[main] 无重叠，JSON已保存至示例目录: {example_path}")
+        # 循环只在无重叠时退出，直接保存至示例目录
+        EXAMPLE_JSON_DIR.mkdir(exist_ok=True)
+        example_path = EXAMPLE_JSON_DIR / f"{name}.json"
+        example_path.write_text(
+            json.dumps(result_with_material, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"[main] 无重叠，JSON已保存至示例目录: {example_path}")
 
-            # AI-2：每 10 个干净场景触发汇总并更新 AI-1 的 system_prompt
-            clean_evals = [e for e in eval_log if not e.get("has_overlaps", True)]
-            total_clean = len(clean_evals)
-            if total_clean > 0 and total_clean % CLEAN_SCENES_PER_SUMMARY == 0:
-                print(f"[AI-2] 已积累 {total_clean} 个干净场景，触发汇总并更新 system_prompt...")
-                try:
-                    summarize_and_update(clean_evals[-CLEAN_SCENES_PER_SUMMARY:], SKILLS_DIR)
-                    print("[AI-2] system_prompt 更新完成。")
-                except Exception as exc:
-                    print(f"[AI-2] WARNING: 汇总更新失败 — {exc}")
-        else:
-            print(f"[main] 最终仍有重叠，跳过 example_json/。")
+        # AI-2：每 10 个干净场景触发汇总并更新 AI-1 的 system_prompt
+        clean_evals = [e for e in eval_log if not e.get("has_overlaps", True)]
+        total_clean = len(clean_evals)
+        if total_clean > 0 and total_clean % CLEAN_SCENES_PER_SUMMARY == 0:
+            print(f"[AI-2] 已积累 {total_clean} 个干净场景，触发汇总并更新 system_prompt...")
+            try:
+                summarize_and_update(clean_evals[-CLEAN_SCENES_PER_SUMMARY:], SKILLS_DIR)
+                print("[AI-2] system_prompt 更新完成。")
+            except Exception as exc:
+                print(f"[AI-2] WARNING: 汇总更新失败 — {exc}")
 
         scene_data = result.get("scene", {"buildings": [], "roads": []})
         tx_params = result.get("tx", {})
