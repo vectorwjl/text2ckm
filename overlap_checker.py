@@ -177,6 +177,9 @@ def check_overlaps(scene_data: dict) -> list:
             intersection = poly_a.intersection(poly_b)
             area = intersection.area
             if area > 0.01:  # 忽略 < 0.01 m² 的数值误差
+                cx = round(intersection.centroid.x, 2)
+                cy = round(intersection.centroid.y, 2)
+                bounds = [round(v, 2) for v in intersection.bounds]
                 overlaps.append({
                     "type": "building_building",
                     "a_idx": i,
@@ -184,6 +187,8 @@ def check_overlaps(scene_data: dict) -> list:
                     "a_desc": _desc_building(i, b_a),
                     "b_desc": _desc_building(j, b_b),
                     "overlap_area_m2": round(area, 4),
+                    "overlap_centroid": (cx, cy),
+                    "overlap_bounds": bounds,
                 })
 
     # 建筑 vs 道路
@@ -192,6 +197,9 @@ def check_overlaps(scene_data: dict) -> list:
             intersection = poly_b.intersection(poly_r)
             area = intersection.area
             if area > 0.01:
+                cx = round(intersection.centroid.x, 2)
+                cy = round(intersection.centroid.y, 2)
+                bounds = [round(v, 2) for v in intersection.bounds]
                 overlaps.append({
                     "type": "building_road",
                     "a_idx": i,
@@ -199,6 +207,8 @@ def check_overlaps(scene_data: dict) -> list:
                     "a_desc": _desc_building(i, b),
                     "b_desc": _desc_road(j, r),
                     "overlap_area_m2": round(area, 4),
+                    "overlap_centroid": (cx, cy),
+                    "overlap_bounds": bounds,
                 })
 
     # 道路 vs 道路
@@ -209,6 +219,9 @@ def check_overlaps(scene_data: dict) -> list:
             intersection = poly_a.intersection(poly_b)
             area = intersection.area
             if area > 0.01:
+                cx = round(intersection.centroid.x, 2)
+                cy = round(intersection.centroid.y, 2)
+                bounds = [round(v, 2) for v in intersection.bounds]
                 overlaps.append({
                     "type": "road_road",
                     "a_idx": i,
@@ -216,6 +229,8 @@ def check_overlaps(scene_data: dict) -> list:
                     "a_desc": _desc_road(i, r_a),
                     "b_desc": _desc_road(j, r_b),
                     "overlap_area_m2": round(area, 4),
+                    "overlap_centroid": (cx, cy),
+                    "overlap_bounds": bounds,
                 })
 
     return overlaps
@@ -234,9 +249,13 @@ def format_overlap_feedback(overlaps: list) -> str:
         f"OVERLAP ERRORS detected in your scene — please fix all {len(overlaps)} issue(s):",
     ]
     for idx, ov in enumerate(overlaps, 1):
+        cx, cy = ov["overlap_centroid"]
+        bnd = ov["overlap_bounds"]  # [minx, miny, maxx, maxy]
         lines.append(
             f"{idx}. {ov['a_desc']} overlaps with {ov['b_desc']}. "
-            f"Overlap area: {ov['overlap_area_m2']:.2f} m²."
+            f"Overlap area: {ov['overlap_area_m2']:.2f} m². "
+            f"Overlap centroid: ({cx}, {cy}). "
+            f"Overlap bounding box: x=[{bnd[0]}, {bnd[2]}], y=[{bnd[1]}, {bnd[3]}]."
         )
 
     lines += [
