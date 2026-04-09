@@ -266,5 +266,9 @@ def format_overlap_feedback(overlaps: list) -> str:
         "- Minimum clearance between building footprint and road edge: >= 5.0m",
         "All coordinates must remain within the original map bounds.",
         "Use 0.01m precision for all coordinates and dimensions.",
+        "",
+        "CRITICAL WARNING: When moving an object to fix an overlap, make sure the new",
+        "position does NOT create a NEW overlap with any other building or road.",
+        "You must check ALL pairs globally — resolving one overlap must not introduce another.",
     ]
     return "\n".join(lines)

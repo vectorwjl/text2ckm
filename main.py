@@ -87,6 +87,9 @@ def main():
             # 有重叠则继续重试（无上限）
             feedback = format_overlap_feedback(overlaps)
             print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
+            print(f"[main] --- Overlap feedback sent to AI-1 ---")
+            print(feedback)
+            print(f"[main] --- End of overlap feedback ---")
             scene_json_str = json.dumps(result.get("scene", {}), ensure_ascii=False, indent=2)
             retry_text = (
                 text + "\n\n"
