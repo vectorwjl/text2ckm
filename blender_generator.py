@@ -13,10 +13,11 @@ import subprocess
 from pathlib import Path
 
 try:
-    from config import BLENDER_EXECUTABLE, BLENDER_TIMEOUT
+    from config import BLENDER_EXECUTABLE, BLENDER_TIMEOUT, ENABLE_ROADS
 except ImportError:
     BLENDER_EXECUTABLE = "F:/Blender/blender.exe"
     BLENDER_TIMEOUT = 120
+    ENABLE_ROADS = True
 
 
 def generate_scene_from_description(scene_data: dict, scene_dir: str) -> list:
@@ -35,8 +36,9 @@ def generate_scene_from_description(scene_data: dict, scene_dir: str) -> list:
 
     # Write scene parameters for the Blender script to read
     params_path = mesh_dir / "_scene_params.json"
+    blender_data = scene_data if ENABLE_ROADS else {**scene_data, "roads": []}
     params_path.write_text(
-        json.dumps(scene_data, ensure_ascii=False, indent=2),
+        json.dumps(blender_data, ensure_ascii=False, indent=2),
         encoding="utf-8"
     )
 

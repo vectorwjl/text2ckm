@@ -9,3 +9,6 @@ DEEPSEEK_EVALUATOR_TEMP = 0.5   # 比 AI-1(0.3) 稍高，评语更灵活
 # Blender configuration
 BLENDER_EXECUTABLE = "F:/Blender/blender.exe"
 BLENDER_TIMEOUT = 120  # seconds per scene
+
+# Scene feature toggles
+ENABLE_ROADS = False  # Set to True to re-enable road mesh generation and overlap checks

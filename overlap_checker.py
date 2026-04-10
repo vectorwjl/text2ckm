@@ -13,6 +13,11 @@ from shapely.geometry import JOIN_STYLE
 from shapely import affinity
 import math
 
+try:
+    from config import ENABLE_ROADS
+except ImportError:
+    ENABLE_ROADS = True
+
 
 # ---------------------------------------------------------------------------
 # 建筑 footprint 转换
@@ -160,12 +165,13 @@ def check_overlaps(scene_data: dict) -> list:
             print(f"[overlap_checker] WARNING: failed to convert building {i}: {e}")
 
     r_polys = []
-    for i, r in enumerate(roads):
-        try:
-            poly = road_to_polygon(r)
-            r_polys.append((i, r, poly))
-        except Exception as e:
-            print(f"[overlap_checker] WARNING: failed to convert road {i}: {e}")
+    if ENABLE_ROADS:
+        for i, r in enumerate(roads):
+            try:
+                poly = road_to_polygon(r)
+                r_polys.append((i, r, poly))
+            except Exception as e:
+                print(f"[overlap_checker] WARNING: failed to convert road {i}: {e}")
 
     overlaps = []
 
