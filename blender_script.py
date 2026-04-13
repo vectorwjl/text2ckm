@@ -154,6 +154,38 @@ def _make_u_shaped(x, y, outer_w, outer_l, inner_w, inner_l, height):
     return _apply_boolean(outer, inner)
 
 
+def _make_trapezoidal(x, y, bottom_width, top_width, length, height):
+    hw_bot = bottom_width / 2
+    hw_top = top_width / 2
+    hl = length / 2
+    verts = [
+        (x - hw_bot, y - hl, 0),
+        (x + hw_bot, y - hl, 0),
+        (x + hw_top, y + hl, 0),
+        (x - hw_top, y + hl, 0),
+        (x - hw_bot, y - hl, height),
+        (x + hw_bot, y - hl, height),
+        (x + hw_top, y + hl, height),
+        (x - hw_top, y + hl, height),
+    ]
+    faces = [
+        (0, 1, 2, 3), (7, 6, 5, 4),
+        (0, 1, 5, 4), (1, 2, 6, 5),
+        (2, 3, 7, 6), (3, 0, 4, 7),
+    ]
+    bm = bmesh.new()
+    vl = [bm.verts.new(v) for v in verts]
+    bm.verts.ensure_lookup_table()
+    for f in faces:
+        bm.faces.new([vl[i] for i in f])
+    mesh = bpy.data.meshes.new("trapezoid")
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new("trapezoid", mesh)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
 # ---------------------------------------------------------------------------
 # Road generators
 # ---------------------------------------------------------------------------
@@ -250,6 +282,7 @@ def main():
     scene_data = json.loads(params_path.read_text(encoding="utf-8"))
     buildings = scene_data.get("buildings", [])
     roads = scene_data.get("roads", [])
+    enabled_types = scene_data.get("_enabled_building_types", ["rectangular", "trapezoidal"])
 
     _clear_scene()
 
@@ -259,6 +292,9 @@ def main():
     for i, b in enumerate(buildings):
         _clear_scene()
         btype = b.get("type", "rectangular")
+        if btype not in enabled_types:
+            print(f"[blender_script] Skipping building_{i} (type '{btype}' not enabled).")
+            continue
         x = float(b.get("x", 0))
         y = float(b.get("y", 0))
         height = float(b.get("height", 10))
@@ -270,6 +306,12 @@ def main():
                 w = float(b.get("width", 10))
                 l = float(b.get("length", b.get("width", 10)))
                 obj = _make_rectangular(x, y, w, l, height)
+            elif btype == "trapezoidal":
+                obj = _make_trapezoidal(x, y,
+                    float(b.get("bottom_width", 12)),
+                    float(b.get("top_width", 8)),
+                    float(b.get("length", 10)),
+                    height)
             elif btype == "l_shaped":
                 obj = _make_l_shaped(x, y,
                     float(b.get("width1", 10)), float(b.get("length1", 10)),

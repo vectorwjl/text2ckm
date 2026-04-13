@@ -14,9 +14,10 @@ from shapely import affinity
 import math
 
 try:
-    from config import ENABLE_ROADS
+    from config import ENABLE_ROADS, ENABLED_BUILDING_TYPES
 except ImportError:
     ENABLE_ROADS = True
+    ENABLED_BUILDING_TYPES = ["rectangular", "trapezoidal"]
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +32,11 @@ def _desc_building(idx: int, b: dict) -> str:
         w = float(b.get("width", 10))
         l = float(b.get("length", w))
         return f"Building {idx} (rectangular at ({x:.2f}, {y:.2f}), {w:.2f}×{l:.2f}m)"
+    elif btype == "trapezoidal":
+        bw = float(b.get("bottom_width", 12))
+        tw = float(b.get("top_width", 8))
+        l  = float(b.get("length", 10))
+        return f"Building {idx} (trapezoidal at ({x:.2f}, {y:.2f}), bottom={bw:.2f} top={tw:.2f} len={l:.2f}m)"
     elif btype == "l_shaped":
         return f"Building {idx} (l_shaped at ({x:.2f}, {y:.2f}))"
     elif btype == "t_shaped":
@@ -75,6 +81,17 @@ def building_to_polygon(b: dict) -> Polygon:
         right_cy = y + ml / 2 - wl / 2
         right = box(right_cx - ww / 2, right_cy - wl / 2, right_cx + ww / 2, right_cy + wl / 2)
         poly = main.union(left).union(right)
+
+    elif btype == "trapezoidal":
+        bw = float(b.get("bottom_width", 12))
+        tw = float(b.get("top_width", 8))
+        l  = float(b.get("length", 10))
+        poly = Polygon([
+            (x - bw / 2, y - l / 2),
+            (x + bw / 2, y - l / 2),
+            (x + tw / 2, y + l / 2),
+            (x - tw / 2, y + l / 2),
+        ])
 
     elif btype == "u_shaped":
         ow = float(b.get("outer_width", 40))
@@ -158,6 +175,10 @@ def check_overlaps(scene_data: dict) -> list:
 
     b_polys = []
     for i, b in enumerate(buildings):
+        btype = b.get("type", "rectangular")
+        if btype not in ENABLED_BUILDING_TYPES:
+            print(f"[overlap_checker] Skipping building {i} (type '{btype}' not enabled).")
+            continue
         try:
             poly = building_to_polygon(b)
             b_polys.append((i, b, poly))

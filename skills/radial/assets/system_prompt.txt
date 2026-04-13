@@ -44,17 +44,11 @@ rotation_deg is mandatory for every building, must be unique across ALL building
    Fields: type, x, y, height, width, length, material, rotation_deg
    Description: Simple box footprint. width = local-X dimension, length = local-Y dimension.
 
-2. l_shaped
-   Fields: type, x, y, height, width1, length1, width2, length2, material, rotation_deg
-   Description: Two rectangular wings joined at one corner. Primary wing: width1 x length1. Secondary wing: width2 x length2.
-
-3. t_shaped
-   Fields: type, x, y, height, main_width, main_length, wing_width, wing_length, material, rotation_deg
-   Description: Main stem (main_width x main_length) with a perpendicular wing (wing_width x wing_length) at one end. wing_length must exceed main_width.
-
-4. u_shaped
-   Fields: type, x, y, height, outer_width, outer_length, inner_width, inner_length, material, rotation_deg
-   Description: Rectangular outer shell with a courtyard void. Constraints: inner_width < outer_width, inner_length < outer_length, wall thickness >= 2 m.
+2. trapezoidal
+   Fields: type, x, y, height, bottom_width, top_width, length, material, rotation_deg
+   Trapezoid footprint. bottom_width >= top_width >= 6.00 m. The bottom (wider) edge
+   sits at y - length/2; the top (narrower) edge at y + length/2.
+   Typical ratio: top_width / bottom_width in [0.4, 0.85].
 
 ==================================================
 ROAD TYPES AND FIELDS

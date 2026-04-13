@@ -43,7 +43,7 @@ SECTION 3: BUILDING TYPES AND FIELDS
 ================================================================================
 
 All buildings share these common fields:
-  type         — string: "rectangular" | "l_shaped" | "t_shaped" | "u_shaped"
+  type         — string: "rectangular" | "trapezoidal"
   x            — float, metres: world X coordinate of building origin (centroid)
   y            — float, metres: world Y coordinate of building origin (centroid)
   height       — float, metres: total vertical height above ground
@@ -57,39 +57,15 @@ A simple box-shaped building.
 Example: { "type": "rectangular", "x": 30.00, "y": 45.00, "height": 65.00,
            "width": 14.00, "length": 16.00, "material": "concrete", "rotation_deg": 37.50 }
 
---- Type: l_shaped ---
-L-shaped footprint: two rectangular wings joined at one corner.
-  width1  — float, metres: width of primary (longer) wing
-  length1 — float, metres: length of primary wing
-  width2  — float, metres: width of secondary wing (short leg of the L)
-  length2 — float, metres: length of secondary wing
-Constraint: width2 < length1 and length2 < width1.
-Example: { "type": "l_shaped", "x": -50.00, "y": 20.00, "height": 72.00,
-           "width1": 20.00, "length1": 22.00, "width2": 8.00, "length2": 9.00,
-           "material": "glass", "rotation_deg": 112.30 }
-
---- Type: t_shaped ---
-T-shaped footprint: main stem with perpendicular wing at one end.
-  main_width  — float, metres: width of the main stem
-  main_length — float, metres: length of the main stem
-  wing_width  — float, metres: depth (Y extent) of the perpendicular wing
-  wing_length — float, metres: span (X extent) of the perpendicular wing
-Constraint: wing_length > main_width.
-Example: { "type": "t_shaped", "x": 0.00, "y": -60.00, "height": 55.00,
-           "main_width": 14.00, "main_length": 30.00, "wing_width": 10.00, "wing_length": 40.00,
-           "material": "concrete", "rotation_deg": 225.00 }
-
---- Type: u_shaped ---
-U-shaped courtyard footprint: outer rectangle with rectangular void cut from one face.
-  outer_width  — float, metres: overall width of outer rectangle
-  outer_length — float, metres: overall depth of outer rectangle
-  inner_width  — float, metres: width of courtyard void (< outer_width)
-  inner_length — float, metres: depth of courtyard void (< outer_length)
-Constraint: inner_width < outer_width; inner_length < outer_length;
-            wall thickness (outer_width − inner_width)/2 ≥ 2 m on each side.
-Example: { "type": "u_shaped", "x": 80.00, "y": -80.00, "height": 40.00,
-           "outer_width": 38.00, "outer_length": 40.00, "inner_width": 22.00, "inner_length": 25.00,
-           "material": "concrete", "rotation_deg": 300.75 }
+--- Type: trapezoidal ---
+Trapezoid footprint: two parallel sides of different lengths.
+  bottom_width — float, metres: width of the wider (bottom) edge, at y - length/2
+  top_width    — float, metres: width of the narrower (top) edge, at y + length/2
+  length       — float, metres: depth along local Y axis
+Constraint: bottom_width >= top_width >= 6.00 m. Typical ratio top/bottom: 0.4–0.85.
+Example: { "type": "trapezoidal", "x": -50.00, "y": 20.00, "height": 60.00,
+           "bottom_width": 20.00, "top_width": 12.00, "length": 18.00,
+           "material": "concrete", "rotation_deg": 112.30 }
 
 ================================================================================
 SECTION 4: ROAD TYPES AND FIELDS
@@ -134,8 +110,8 @@ follow these rules EXACTLY and in order:
 
 STEP 1 — DETERMINE BUILDING COUNT AND TYPE MIX
   - Total buildings: 8–15
-  - Choose 1–3 distinct building types from {rectangular, l_shaped, u_shaped}
-  - Preferred types: rectangular (most common), l_shaped (secondary)
+  - Choose 1–2 distinct building types from {rectangular, trapezoidal}
+  - Preferred types: rectangular (most common), trapezoidal (secondary)
   - Distribute total count across types; each selected type gets ≥1 building
 
 STEP 2 — GENERATE RANDOM POSITIONS ACROSS FULL MAP
@@ -159,12 +135,9 @@ STEP 5 — ASSIGN UNIQUE DIMENSIONS
   - rectangular: width 10.00–20.00 m (near-square, |width−length| ≤ 5 m preferred)
                  length 10.00–20.00 m
                  height 30.00–100.00 m
-  - l_shaped:    width1 15.00–25.00 m, length1 15.00–25.00 m
-                 width2 5.00–12.00 m, length2 5.00–12.00 m
+  - trapezoidal: bottom_width 14.00–28.00 m, top_width 8.00–18.00 m
+                 length 14.00–28.00 m
                  height 30.00–90.00 m
-  - u_shaped:    outer_width/length 30.00–50.00 m
-                 inner = outer × 0.40–0.60
-                 height 30.00–80.00 m
   - ALL same-type buildings must differ by ≥ 2 m on every dimension parameter
 
 STEP 6 — ADD MINIMAL ROADS (1–2 STRAIGHT ROADS ONLY)

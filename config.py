@@ -12,3 +12,5 @@ BLENDER_TIMEOUT = 120  # seconds per scene
 
 # Scene feature toggles
 ENABLE_ROADS = False  # Set to True to re-enable road mesh generation and overlap checks
+ENABLED_BUILDING_TYPES = ["rectangular", "trapezoidal"]
+# To restore all types, set: ["rectangular", "trapezoidal", "l_shaped", "t_shaped", "u_shaped"]

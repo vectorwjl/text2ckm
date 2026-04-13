@@ -8,7 +8,7 @@ All building objects share common positional and material fields, then carry typ
 
 | Field          | Type   | Unit | Description                                                   |
 |----------------|--------|------|---------------------------------------------------------------|
-| `type`         | string | —    | One of: `rectangular`, `l_shaped`, `t_shaped`, `u_shaped`    |
+| `type`         | string | —    | One of: `rectangular`, `trapezoidal`                         |
 | `x`            | float  | m    | World-space X coordinate of the building origin (centroid)    |
 | `y`            | float  | m    | World-space Y coordinate of the building origin (centroid)    |
 | `height`       | float  | m    | Total vertical height of the building above ground (z=0)      |
@@ -30,48 +30,20 @@ Geometric interpretation: the footprint occupies [x − width/2, x + width/2] ×
 
 ---
 
-## Type: `l_shaped`
+## Type: `trapezoidal`
 
-An L-shaped footprint formed by two rectangular wings joined at one corner.
+A trapezoid footprint with two parallel sides of different lengths.
 
-| Field     | Type  | Unit | Description                                         |
-|-----------|-------|------|-----------------------------------------------------|
-| `width1`  | float | m    | Width of the primary (longer) wing                  |
-| `length1` | float | m    | Length of the primary wing                          |
-| `width2`  | float | m    | Width of the secondary wing (the short leg of the L)|
-| `length2` | float | m    | Length of the secondary wing                        |
+| Field          | Type  | Unit | Description                                                        |
+|----------------|-------|------|--------------------------------------------------------------------|
+| `bottom_width` | float | m    | Width of the wider (bottom) edge, centred at y − length/2          |
+| `top_width`    | float | m    | Width of the narrower (top) edge, centred at y + length/2          |
+| `length`       | float | m    | Depth along the local Y axis                                       |
 
-Geometric interpretation: the primary wing runs along the local Y axis. The secondary wing branches off one end of the primary wing along the local X axis, creating the characteristic L shape. The origin (x, y) is placed at the inner corner of the L. Constraint: `width2 < length1` and `length2 < width1` are recommended for a visually correct L shape.
-
----
-
-## Type: `t_shaped`
-
-A T-shaped footprint formed by a main stem and a perpendicular wing (the top bar of the T).
-
-| Field         | Type  | Unit | Description                                              |
-|---------------|-------|------|----------------------------------------------------------|
-| `main_width`  | float | m    | Width of the main stem (runs along local Y axis)         |
-| `main_length` | float | m    | Length of the main stem                                  |
-| `wing_width`  | float | m    | Depth (local Y extent) of the perpendicular wing         |
-| `wing_length` | float | m    | Span (local X extent) of the perpendicular wing          |
-
-Geometric interpretation: the main stem is centred on the local Y axis. The wing is attached to one end of the stem and extends symmetrically left and right. The origin (x, y) is at the geometric centre of the combined T footprint. Constraint: `wing_length > main_width` for a proper T shape.
-
----
-
-## Type: `u_shaped`
-
-A U-shaped (courtyard) footprint formed by a rectangular outer shell with a rectangular void cut from one face.
-
-| Field          | Type  | Unit | Description                                          |
-|----------------|-------|------|------------------------------------------------------|
-| `outer_width`  | float | m    | Overall width of the outer rectangle                 |
-| `outer_length` | float | m    | Overall length (depth) of the outer rectangle        |
-| `inner_width`  | float | m    | Width of the courtyard void                          |
-| `inner_length` | float | m    | Depth of the courtyard void (open toward one face)   |
-
-Geometric interpretation: the outer rectangle is centred at (x, y). The courtyard void is centred on the open face of the U, leaving three walls of thickness (outer_width − inner_width)/2 on the sides and (outer_length − inner_length) at the closed end. Constraints: `inner_width < outer_width`, `inner_length < outer_length`, and wall thickness ≥ 2 m on each side.
+Geometric interpretation: the four footprint vertices (before rotation) are
+`(±bottom_width/2, −length/2)` and `(±top_width/2, +length/2)`.
+The origin (x, y) is at the centroid of the trapezoid.
+Constraints: `bottom_width >= top_width >= 6.00 m`; typical ratio `top_width / bottom_width` in [0.4, 0.85].
 
 ---
 
