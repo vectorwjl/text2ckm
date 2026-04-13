@@ -11,6 +11,7 @@ from step2_json_to_scene import generate_scene
 from step3_render_topdown import render_topdown
 from step4_path_gain import generate_path_gain
 from overlap_checker import check_overlaps, format_overlap_feedback
+from overlap_resolver import resolve_overlaps, format_resolution_feedback
 from scene_evaluator import evaluate_scene, summarize_and_update
 
 EXAMPLE_JSON_DIR = Path("example_json")
@@ -86,16 +87,24 @@ def main():
 
             # 有重叠则继续重试（无上限）
             feedback = format_overlap_feedback(overlaps)
+            scene_for_resolver = result.get("scene", {})
+            moves = resolve_overlaps(scene_for_resolver, overlaps)
+            resolution_feedback = format_resolution_feedback(
+                scene_for_resolver, overlaps, moves
+            )
             print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
             print(f"[main] --- Overlap feedback sent to AI-1 ---")
             print(feedback)
+            if resolution_feedback:
+                print(resolution_feedback)
             print(f"[main] --- End of overlap feedback ---")
-            scene_json_str = json.dumps(result.get("scene", {}), ensure_ascii=False, indent=2)
+            scene_json_str = json.dumps(scene_for_resolver, ensure_ascii=False, indent=2)
             retry_text = (
                 text + "\n\n"
                 + "=== 当前生成的场景JSON（所有建筑/道路坐标，供参考）===\n"
                 + scene_json_str + "\n\n"
                 + feedback
+                + ("\n" + resolution_feedback if resolution_feedback else "")
             )
             attempt += 1
 

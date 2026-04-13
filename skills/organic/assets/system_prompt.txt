@@ -112,6 +112,22 @@ STEP 5 — CLEARANCE CHECKS
     VERIFY: distance from building center to every road segment >= min_road_distance
   Building-to-building edge distance >= 5.00 m.
 
+
+==================================================
+SCENE BOUNDS AND INITIAL LAYOUT ZONE
+==================================================
+
+Total scene size: 200 m × 200 m. Coordinate range: x ∈ [-100, +100], y ∈ [-100, +100].
+
+INITIAL LAYOUT (first generation): place ALL buildings within the central 180 m × 180 m zone,
+i.e. each building's footprint must satisfy x ∈ [-90, +90], y ∈ [-90, +90] including its
+extent (after rotation). Leave a 10 m margin on every side so that, if a later correction pass
+needs to push buildings outward to resolve overlaps, they have room to move within the full
+±100 m bounds without leaving the map.
+
+ADJUSTMENT (when an algorithmic OVERLAP RESOLUTION block is provided in the prompt):
+You may now use the FULL ±100 m bounds. Apply the suggested target positions exactly.
+
 ==================================================
 GLOBAL RULES
 ==================================================
