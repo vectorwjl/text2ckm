@@ -18,10 +18,8 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 BUILDING_TYPE_NAMES = {
-    "rectangular": "矩形建筑",
-    "l_shaped":    "L形建筑",
-    "t_shaped":    "T形建筑",
-    "u_shaped":    "U形庭院建筑",
+    "rectangular":  "矩形建筑",
+    "trapezoidal":  "梯形建筑",
 }
 
 MATERIAL_NAMES = {
@@ -101,36 +99,17 @@ def _dim_desc_rectangular() -> str:
         return f"宽{w}米、长{l}米"
 
 
-def _dim_desc_l_shaped() -> str:
-    w1 = _r(15.0, 35.0)
-    l1 = _r(15.0, 35.0)
-    w2 = _r(5.0, min(w1 * 0.7, 20.0))
-    l2 = _r(5.0, min(l1 * 0.7, 20.0))
-    return f"主体{w1}×{l1}米，翼部{w2}×{l2}米"
-
-
-def _dim_desc_t_shaped() -> str:
-    mw = _r(20.0, 50.0)
-    ml = _r(15.0, 35.0)
-    ww = _r(8.0, min(mw * 0.5, 20.0))
-    wl = _r(6.0, min(ml * 0.5, 15.0))
-    return f"主体{mw}×{ml}米，侧翼{ww}×{wl}米"
-
-
-def _dim_desc_u_shaped() -> str:
-    ow = _r(30.0, 60.0)
-    ol = _r(30.0, 60.0)
-    factor = _r(0.4, 0.7)
-    iw = round(ow * factor, 2)
-    il = round(ol * factor, 2)
-    return f"外围{ow}×{ol}米，内庭{iw}×{il}米"
+def _dim_desc_trapezoidal() -> str:
+    bw = _r(12.0, 28.0)
+    ratio = _r(0.4, 0.85)
+    tw = round(bw * ratio, 2)
+    l = _r(12.0, 28.0)
+    return f"底边宽{bw}米、顶边宽{tw}米、深度{l}米"
 
 
 _DIM_DESC_FUNCS = {
     "rectangular": _dim_desc_rectangular,
-    "l_shaped":    _dim_desc_l_shaped,
-    "t_shaped":    _dim_desc_t_shaped,
-    "u_shaped":    _dim_desc_u_shaped,
+    "trapezoidal": _dim_desc_trapezoidal,
 }
 
 
@@ -201,8 +180,7 @@ def _rand_rx_desc() -> str:
 
 
 def _rand_rt_desc() -> str:
-    map_size = random.randint(150, 400)
-    return f"地图尺寸{map_size}米"
+    return "地图尺寸200米"
 
 
 # ---------------------------------------------------------------------------
@@ -325,14 +303,14 @@ def _generate_perimeter_prompt() -> str:
     road_mat_name = MATERIAL_NAMES[road_mat]
     setback = _r(3.0, 5.0)
 
-    # 周边式以U形和L形为主
-    btypes = random.choices(["u_shaped", "l_shaped"], weights=[0.6, 0.4], k=n_blocks)
-    type_names = [BUILDING_TYPE_NAMES[bt] for bt in btypes]
+    # 周边式：矩形或梯形建筑沿街区周边多栋并排布置，围合中间庭院
+    btype = random.choice(["rectangular", "trapezoidal"])
+    type_name = BUILDING_TYPE_NAMES[btype]
+    n_per_side = random.randint(2, 3)
     height_desc = _rand_height_desc()
     b_mat = _weighted_choice(BUILDING_MATERIAL_WEIGHTS)
     b_mat_name = MATERIAL_NAMES[b_mat]
-
-    bldg_desc = f"每个街区放置1栋{'或'.join(set(type_names))}围合建筑"
+    dim_desc = _DIM_DESC_FUNCS[btype]()
 
     tx_part = _rand_tx_desc()
     rx_part = _rand_rx_desc()
@@ -340,8 +318,9 @@ def _generate_perimeter_prompt() -> str:
 
     prompt = (
         f"创建虚拟场景：周边式围合布局，{n_blocks}个正方形街区（每块约{block_size}米），"
-        f"{bldg_desc}，建筑三面或四面围合内庭院，庭院内部留空，"
-        f"{height_desc}，{b_mat_name}材质，建筑朝向与街区轴线一致，"
+        f"每个街区沿四边各排列{n_per_side}栋{type_name}（{dim_desc}）围合中间庭院，"
+        f"庭院内部留空，{height_desc}，{b_mat_name}材质，"
+        f"建筑朝向与街区轴线一致，各栋尺寸各不相同，"
         f"沿街区外侧设置周边道路（宽{road_width}米，{road_mat_name}材质），"
         f"建筑距道路边缘{setback}米，"
         f"{tx_part}，{rx_part}，{rt_part}"
