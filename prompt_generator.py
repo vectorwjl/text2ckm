@@ -264,7 +264,7 @@ def _generate_point_scatter_prompt() -> str:
     """点式散布：独立塔楼随机散点分布，道路稀少。"""
     n_buildings = random.randint(8, 15)
     all_types = list(BUILDING_TYPE_NAMES.keys())
-    n_type_groups = random.choices([1, 2, 3], weights=[0.4, 0.4, 0.2])[0]
+    n_type_groups = min(random.choices([1, 2, 3], weights=[0.4, 0.4, 0.2])[0], len(all_types))
     selected_types = random.sample(all_types, n_type_groups)
 
     counts = [1] * n_type_groups
@@ -400,7 +400,7 @@ def _generate_organic_prompt() -> str:
     """有机式：曲线道路，建筑自由不规则排列。"""
     n_buildings = random.randint(10, 15)
     all_types = list(BUILDING_TYPE_NAMES.keys())
-    n_type_groups = random.choices([2, 3], weights=[0.5, 0.5])[0]
+    n_type_groups = min(random.choices([2, 3], weights=[0.5, 0.5])[0], len(all_types))
     selected_types = random.sample(all_types, n_type_groups)
 
     counts = [1] * n_type_groups
