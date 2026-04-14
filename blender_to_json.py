@@ -143,17 +143,21 @@ def main():
         ex_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[blender_to_json] 无重叠 JSON 已保存：{ex_path}")
 
-    # ── 重新生成 3D 场景 ──────────────────────────────────────────────────────
+    # ── 重新生成 3D 场景 + 俯视图 + path_gain ────────────────────────────────
     print("\n[blender_to_json] 重新生成 3D 场景…")
     try:
         from step2_json_to_scene import generate_scene
         from step3_render_topdown import render_topdown
+        from step4_path_gain import generate_path_gain
 
-        scene_dir = str(Path("simple_scene") / name)
+        tx_params = full.get("tx", {})
+        rx_params = full.get("rx", {})
         rt_params = {
             **full.get("rt", {}),
-            "frequency_ghz": full.get("tx", {}).get("frequency_ghz", 28.0),
+            "frequency_ghz": tx_params.get("frequency_ghz", 28.0),
         }
+
+        scene_dir = str(Path("simple_scene") / name)
         xml_path = generate_scene(scene, scene_dir, rt_params)
         print(f"[blender_to_json] 3D 场景 XML 已生成：{xml_path}")
 
@@ -165,8 +169,22 @@ def main():
             cam_height=max(map_size * 2.5, 500.0),
         )
         print(f"[blender_to_json] 俯视图已保存：{topdown_png}")
+
+        photo_path = str(Path("path_gain/path_gain_photo") / f"{name}.png")
+        npz_path   = str(Path("path_gain/path_gain_raw_data") / f"{name}.npz")
+        Path(photo_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(npz_path).parent.mkdir(parents=True, exist_ok=True)
+        generate_path_gain(
+            xml_path=xml_path,
+            photo_path=photo_path,
+            npz_path=npz_path,
+            tx_params=tx_params,
+            rx_params=rx_params,
+            rt_params=rt_params,
+        )
+        print(f"[blender_to_json] Path gain 已保存：{photo_path}")
     except Exception as e:
-        print(f"[blender_to_json] 渲染失败（可手动运行 main.py）：{e}")
+        print(f"[blender_to_json] 场景生成失败（可手动运行 main.py）：{e}")
 
 
 if __name__ == "__main__":
