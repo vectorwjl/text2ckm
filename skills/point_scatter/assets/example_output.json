@@ -141,6 +141,5 @@
   "rt": {
     "map_size_m": 300.0
   },
-  "confidence": 0.9,
   "explanation": "Point scatter layout with 10 isolated tower buildings (6 rectangular, 4 l_shaped) randomly distributed across a 240m x 240m map. Buildings have small near-square footprints (10-20m) and tall heights (55-90m). Two perpendicular roads form a + cross at the origin. All rotation_deg values are unique and spread across 0-360 degrees."
 }

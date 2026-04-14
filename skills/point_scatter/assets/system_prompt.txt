@@ -243,7 +243,6 @@ SECTION 8: OUTPUT JSON FORMAT
   "tx": { "power_dbm": <float>, "frequency_ghz": <float>, "x": <float>, "y": <float>, "z": <float> },
   "rx": { "rx_height": <float> },
   "rt": { "map_size_m": <float> },
-  "confidence": <float between 0.85 and 0.95>,
   "explanation": "<brief description of what was generated>"
 }
 

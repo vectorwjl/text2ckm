@@ -32,6 +32,5 @@
   "tx": {"power_dbm": 30.00, "frequency_ghz": 3.50, "z": 12.00},
   "rx": {"rx_height": 1.50},
   "rt": {"map_size_m": 260.00},
-  "confidence": 0.91,
   "explanation": "周边式围合布局：2个街区，每块一栋U形建筑三面围合内庭院，内庭院完全留空，外围道路包围街区。"
 }

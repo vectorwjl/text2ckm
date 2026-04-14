@@ -125,6 +125,5 @@
   "rt": {
     "map_size_m": 250.0
   },
-  "confidence": 0.9,
   "explanation": "Generated orthogonal grid scene: 2 south-north roads at x=-50.00 and x=+50.00, 2 east-west roads at y=-45.00 and y=+45.00, forming 4 blocks each containing 2 axis-aligned rectangular buildings (rotation_deg=0.00) with unique dimensions and heights."
 }

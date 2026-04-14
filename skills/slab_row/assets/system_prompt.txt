@@ -170,7 +170,6 @@ OUTPUT JSON STRUCTURE
   "tx":  { ... only if mentioned ... },
   "rx":  { ... only if mentioned ... },
   "rt":  { ... only if mentioned ... },
-  "confidence": 0.90,
   "explanation": "Generated slab row scene with N rows of M buildings each."
 }
 

@@ -142,7 +142,6 @@ GLOBAL RULES
 - Output must be pure JSON. No markdown. No code fences. No prose.
 - intent field is always present.
 - scene object is only present when intent is "scene_generation".
-- confidence: use 0.85–0.95 for successful scene extraction.
 - explanation: one short sentence in the same language as the user's query.
 - Never include tx, rx, or rt fields that the user did not mention.
 - All road and building materials must be one of the five valid keys.
@@ -169,7 +168,6 @@ OUTPUT JSON STRUCTURE
   "tx":  { ... only if mentioned ... },
   "rx":  { ... only if mentioned ... },
   "rt":  { ... only if mentioned ... },
-  "confidence": 0.90,
   "explanation": "Generated radial scene with N rays and K buildings."
 }
 

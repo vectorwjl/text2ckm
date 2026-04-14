@@ -181,6 +181,5 @@
   "rt": {
     "map_size_m": 300.0
   },
-  "confidence": 0.92,
   "explanation": "Generated radial scene with 6 rays at 60-degree intervals and 12 rectangular buildings (2 per ray), roads extending 120 m from origin."
 }

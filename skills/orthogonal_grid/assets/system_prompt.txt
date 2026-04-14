@@ -172,7 +172,6 @@ OUTPUT JSON STRUCTURE
   "tx":  { ... only if mentioned ... },
   "rx":  { ... only if mentioned ... },
   "rt":  { ... only if mentioned ... },
-  "confidence": 0.90,
   "explanation": "Generated orthogonal grid scene with N buildings across K blocks."
 }
 

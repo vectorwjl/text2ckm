@@ -22,6 +22,19 @@ def main():
 
     for txt_file in txt_files:
         name = txt_file.stem
+
+        # 检查该场景的所有输出文件是否都已存在，若是则跳过
+        _expected = [
+            Path("text_prompt_json") / f"{name}.json",
+            Path("simple_scene") / name / "scene_description.json",
+            Path("3D_scene") / f"{name}.png",
+            Path("path_gain/path_gain_photo") / f"{name}.png",
+            Path("path_gain/path_gain_raw_data") / f"{name}.npz",
+        ]
+        if all(p.exists() for p in _expected):
+            print(f"[main] Skipping '{name}' — all output files already exist.")
+            continue
+
         print(f"\n{'='*50}")
         print(f"[main] Processing: {name}")
         print(f"{'='*50}")

@@ -15,9 +15,9 @@ blender_to_json.py — 将 Blender 导出的建筑物位置写回场景 JSON。
 
 输出:
     simple_scene/{name}/scene_description.json  原地更新建筑坐标
-    text_prompt_json/{name}_blender.json        完整场景 JSON
-    example_json/{name}_blender.json            仅当无重叠时保存
-    3D_scene/{name}_blender.png                 仅当 --render 时生成
+    text_prompt_json/{name}.json                覆盖原 JSON
+    example_json/{name}.json                    仅当无重叠时覆盖
+    3D_scene/{name}.png                         仅当 --render 时覆盖
 """
 
 import json
@@ -114,15 +114,15 @@ def main():
     src_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[blender_to_json] 已更新：{src_path}")
 
-    # ── 保存到 text_prompt_json/ ──────────────────────────────────────────────
-    out_path = Path("text_prompt_json") / f"{name}_blender.json"
+    # ── 保存到 text_prompt_json/（覆盖原文件）────────────────────────────────
+    out_path = Path("text_prompt_json") / f"{name}.json"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[blender_to_json] 已保存：{out_path}")
 
-    # ── 无重叠时保存到 example_json/ ─────────────────────────────────────────
+    # ── 无重叠时保存到 example_json/（覆盖原文件）────────────────────────────
     if not overlaps:
-        ex_path = Path("example_json") / f"{name}_blender.json"
+        ex_path = Path("example_json") / f"{name}.json"
         ex_path.parent.mkdir(exist_ok=True)
         ex_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[blender_to_json] 无重叠 JSON 已保存：{ex_path}")
@@ -142,7 +142,7 @@ def main():
             xml_path = generate_scene(scene, scene_dir, rt_params)
             print(f"[blender_to_json] 3D 场景 XML 已生成：{xml_path}")
 
-            topdown_png = str(Path("3D_scene") / f"{name}_blender.png")
+            topdown_png = str(Path("3D_scene") / f"{name}.png")
             map_size = float(full.get("rt", {}).get("map_size_m", 200.0))
             render_topdown(
                 xml_path=xml_path,
