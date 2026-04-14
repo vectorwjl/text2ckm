@@ -74,7 +74,8 @@ import bpy, math, json
 from pathlib import Path
 
 # ── 读取场景数据 ────────────────────────────────────────────────────────────
-_data_file = Path(r"blender_scenes/{name}_data.json")
+# 用 __file__ 定位，避免 Blender 工作目录不是项目根目录的问题
+_data_file = Path(__file__).parent / "{name}_data.json"
 if not _data_file.exists():
     raise FileNotFoundError(f"找不到 {{_data_file}}，请先运行 to_blender.py")
 _sc        = json.loads(_data_file.read_text(encoding="utf-8"))
@@ -206,7 +207,7 @@ for _obj in bpy.data.objects:
         "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
     }}
 
-_path = Path(r"blender_scenes/{name}_positions.json")
+_path = Path(__file__).parent / "{name}_positions.json"
 _path.parent.mkdir(parents=True, exist_ok=True)
 _path.write_text(json.dumps(_out, indent=2, ensure_ascii=False), encoding="utf-8")
 print(f"[extract] {{len(_out)}} 栋建筑已导出到 {{_path}}")
