@@ -74,7 +74,8 @@ import bpy, math, json
 from pathlib import Path
 
 # ── 读取场景数据 ────────────────────────────────────────────────────────────
-_data_file = Path(r"blender_scenes/{name}_data.json")
+# 用 __file__ 定位，避免 Blender 工作目录不是项目根目录的问题
+_data_file = Path(__file__).parent / "{name}_data.json"
 if not _data_file.exists():
     raise FileNotFoundError(f"找不到 {{_data_file}}，请先运行 to_blender.py")
 _sc        = json.loads(_data_file.read_text(encoding="utf-8"))
@@ -206,7 +207,7 @@ for _obj in bpy.data.objects:
         "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
     }}
 
-_path = Path(r"blender_scenes/{name}_positions.json")
+_path = Path(__file__).parent / "{name}_positions.json"
 _path.parent.mkdir(parents=True, exist_ok=True)
 _path.write_text(json.dumps(_out, indent=2, ensure_ascii=False), encoding="utf-8")
 print(f"[extract] {{len(_out)}} 栋建筑已导出到 {{_path}}")
@@ -244,11 +245,18 @@ def main():
     print(f"  导出脚本：{extract_path}")
     print()
     print("── 操作步骤 ──────────────────────────────────────────────────────────")
-    print(f"1. 运行导入脚本（选其一）：")
-    print(f"     blender --python {setup_path}")
-    print(f"     或在 Blender > Scripting 中粘贴 {setup_path} 内容运行")
+    print(f"1. 在 Blender 中运行导入脚本（推荐：GUI 方式）：")
+    print(f"     a) 打开 Blender")
+    print(f"     b) 顶部切换到 Scripting 标签页")
+    print(f"     c) 点击 Open → 选择 {setup_path}")
+    print(f"     d) 点击右上角 ▶ Run Script")
+    print(f"")
+    print(f"   命令行方式（需要知道 blender.exe 完整路径）：")
+    print(f"     Windows: & \"C:\\Program Files\\Blender Foundation\\Blender X.X\\blender.exe\" --python {setup_path}")
+    print(f"     Linux/Mac: blender --python {setup_path}")
+    print(f"")
     print(f"2. 在 Blender 中手动移动/旋转建筑物（G 移动，R 旋转，X/Y 锁轴）")
-    print(f"3. 在 Blender 脚本编辑器中运行：{extract_path}")
+    print(f"3. 同样在 Blender Scripting 标签页中：Open → {extract_path} → ▶ Run Script")
     print(f"4. python blender_to_json.py {name}")
     print(f"   （加 --render 参数可自动重新生成俯视图）")
     print("──────────────────────────────────────────────────────────────────────")
