@@ -49,6 +49,9 @@ def main():
                 f"[main] WARNING: {len(resolve_report['final_overlaps'])} "
                 f"overlap(s) remain after {resolve_report['iterations']} iterations."
             )
+            print(f"[main] 提示：可在 Blender 中手动调整建筑位置：")
+            print(f"[main]   python to_blender.py {name}")
+            print(f"[main]   （详见 to_blender.py 文件头部的工作流说明）")
 
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)
