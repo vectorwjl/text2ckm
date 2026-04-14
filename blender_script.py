@@ -86,13 +86,16 @@ def _make_rectangular(x, y, width, length, height):
     bm.transform(__import__('mathutils').Matrix.Scale(width, 4, (1, 0, 0)))
     bm.transform(__import__('mathutils').Matrix.Scale(length, 4, (0, 1, 0)))
     bm.transform(__import__('mathutils').Matrix.Scale(height, 4, (0, 0, 1)))
-    # Center bottom at z=0
-    bmesh.ops.translate(bm, verts=bm.verts, vec=(x, y, height / 2))
+    # Lift so bottom face is at z=0; keep XY centred at origin so that
+    # rotation applied via obj.rotation_euler rotates around the building's
+    # own centre rather than the world origin.
+    bmesh.ops.translate(bm, verts=bm.verts, vec=(0, 0, height / 2))
     mesh = bpy.data.meshes.new("rect")
     bm.to_mesh(mesh)
     bm.free()
     obj = bpy.data.objects.new("rect", mesh)
     bpy.context.collection.objects.link(obj)
+    obj.location = (x, y, 0)  # position baked into transform, not vertices
     return obj
 
 
@@ -158,15 +161,17 @@ def _make_trapezoidal(x, y, bottom_width, top_width, length, height):
     hw_bot = bottom_width / 2
     hw_top = top_width / 2
     hl = length / 2
+    # Vertices centred at XY origin so that rotation via obj.rotation_euler
+    # turns around the building's own centre, not the world origin.
     verts = [
-        (x - hw_bot, y - hl, 0),
-        (x + hw_bot, y - hl, 0),
-        (x + hw_top, y + hl, 0),
-        (x - hw_top, y + hl, 0),
-        (x - hw_bot, y - hl, height),
-        (x + hw_bot, y - hl, height),
-        (x + hw_top, y + hl, height),
-        (x - hw_top, y + hl, height),
+        (-hw_bot, -hl, 0),
+        ( hw_bot, -hl, 0),
+        ( hw_top,  hl, 0),
+        (-hw_top,  hl, 0),
+        (-hw_bot, -hl, height),
+        ( hw_bot, -hl, height),
+        ( hw_top,  hl, height),
+        (-hw_top,  hl, height),
     ]
     faces = [
         (0, 1, 2, 3), (7, 6, 5, 4),
@@ -183,6 +188,7 @@ def _make_trapezoidal(x, y, bottom_width, top_width, length, height):
     bm.free()
     obj = bpy.data.objects.new("trapezoid", mesh)
     bpy.context.collection.objects.link(obj)
+    obj.location = (x, y, 0)  # position baked into transform, not vertices
     return obj
 
 
@@ -333,8 +339,10 @@ def main():
 
             if abs(rotation_deg) > 0.01:
                 obj.rotation_euler[2] = math.radians(rotation_deg)
-                _select_only(obj)
-                bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            # Always bake location + rotation into vertex data so PLY export
+            # captures the correct world position regardless of rotation.
+            _select_only(obj)
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
             _triangulate(obj)
             ply_path = str(mesh_dir / f"building_{i}.ply")
