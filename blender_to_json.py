@@ -2,8 +2,7 @@
 blender_to_json.py — 将 Blender 导出的建筑物位置写回场景 JSON。
 
 用法:
-    python blender_to_json.py <scene_name>           # 仅更新 JSON + 重叠检测
-    python blender_to_json.py <scene_name> --render  # 同上 + 重新生成 3D 场景和俯视图
+    python blender_to_json.py <scene_name>
 
 前置条件:
     先在 Blender 中运行 blender_scenes/{name}_extract.py，
@@ -17,7 +16,7 @@ blender_to_json.py — 将 Blender 导出的建筑物位置写回场景 JSON。
     simple_scene/{name}/scene_description.json  原地更新建筑坐标
     text_prompt_json/{name}.json                覆盖原 JSON
     example_json/{name}.json                    仅当无重叠时覆盖
-    3D_scene/{name}.png                         仅当 --render 时覆盖
+    3D_scene/{name}.png                         覆盖俯视图
 """
 
 import json
@@ -55,8 +54,7 @@ def main():
         print(__doc__)
         sys.exit(1)
 
-    name      = sys.argv[1]
-    do_render = "--render" in sys.argv
+    name = sys.argv[1]
 
     # ── 读取 Blender 导出的位置 ──────────────────────────────────────────────
     pos_path = Path("blender_scenes") / f"{name}_positions.json"
@@ -88,6 +86,12 @@ def main():
         b["y"] = new_y
         if "rotation_deg" in pos:
             b["rotation_deg"] = round(float(pos["rotation_deg"]) % 360, 2)
+        if "height_m" in pos:
+            old_h = float(b.get("height", 0))
+            new_h = round(float(pos["height_m"]), 2)
+            b["height"] = new_h
+            if abs(new_h - old_h) > 0.01:
+                print(f"  building_{idx}: height {old_h:.2f} → {new_h:.2f} m")
         dx, dy = new_x - old_x, new_y - old_y
         if abs(dx) > 0.01 or abs(dy) > 0.01:
             print(f"  building_{idx}: ({old_x:.2f}, {old_y:.2f}) → "
@@ -127,34 +131,30 @@ def main():
         ex_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[blender_to_json] 无重叠 JSON 已保存：{ex_path}")
 
-    # ── 可选：重新生成 3D 场景 ────────────────────────────────────────────────
-    if do_render:
-        print("\n[blender_to_json] 重新生成 3D 场景…")
-        try:
-            from step2_json_to_scene import generate_scene
-            from step3_render_topdown import render_topdown
+    # ── 重新生成 3D 场景 ──────────────────────────────────────────────────────
+    print("\n[blender_to_json] 重新生成 3D 场景…")
+    try:
+        from step2_json_to_scene import generate_scene
+        from step3_render_topdown import render_topdown
 
-            scene_dir = str(Path("simple_scene") / name)
-            rt_params = {
-                **full.get("rt", {}),
-                "frequency_ghz": full.get("tx", {}).get("frequency_ghz", 28.0),
-            }
-            xml_path = generate_scene(scene, scene_dir, rt_params)
-            print(f"[blender_to_json] 3D 场景 XML 已生成：{xml_path}")
+        scene_dir = str(Path("simple_scene") / name)
+        rt_params = {
+            **full.get("rt", {}),
+            "frequency_ghz": full.get("tx", {}).get("frequency_ghz", 28.0),
+        }
+        xml_path = generate_scene(scene, scene_dir, rt_params)
+        print(f"[blender_to_json] 3D 场景 XML 已生成：{xml_path}")
 
-            topdown_png = str(Path("3D_scene") / f"{name}.png")
-            map_size = float(full.get("rt", {}).get("map_size_m", 200.0))
-            render_topdown(
-                xml_path=xml_path,
-                output_png=topdown_png,
-                cam_height=max(map_size * 2.5, 500.0),
-            )
-            print(f"[blender_to_json] 俯视图已保存：{topdown_png}")
-        except Exception as e:
-            print(f"[blender_to_json] 渲染失败（可手动运行 main.py）：{e}")
-    else:
-        print(f"\n提示：加 --render 参数可自动重新生成 3D 场景和俯视图：")
-        print(f"    python blender_to_json.py {name} --render")
+        topdown_png = str(Path("3D_scene") / f"{name}.png")
+        map_size = float(full.get("rt", {}).get("map_size_m", 200.0))
+        render_topdown(
+            xml_path=xml_path,
+            output_png=topdown_png,
+            cam_height=max(map_size * 2.5, 500.0),
+        )
+        print(f"[blender_to_json] 俯视图已保存：{topdown_png}")
+    except Exception as e:
+        print(f"[blender_to_json] 渲染失败（可手动运行 main.py）：{e}")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ to_blender.py — 将场景 JSON 导出为 Blender 可编辑脚本。
        （或在 Blender GUI > Scripting 标签页中运行）
     3. 在 Blender 中手动移动建筑物（G 移动 / R 旋转 / X|Y 锁轴）
     4. 在 Blender 脚本编辑器中运行 {name}_extract.py
-    5. python blender_to_json.py <name> [--render]
+    5. python blender_to_json.py <name>
 """
 
 import json
@@ -161,6 +161,16 @@ for _i, _b in enumerate(_buildings):
     _obj.rotation_euler = (0.0, 0.0, math.radians(_rot))
     _obj.name           = f"building_{{_i}}"
 
+    # ── 高度标注（仅供参考；修改高度请调整建筑的 Dimensions Z）──────────────
+    bpy.ops.object.text_add(location=(0, 0, 0))
+    _txt              = bpy.context.active_object
+    _txt.name         = f"label_{{_i}}"
+    _txt.data.body    = f"#{{_i}}  H={{_h:.1f}}m"
+    _txt.data.size    = max(2.0, _h * 0.15)
+    _txt.data.align_x = "CENTER"
+    _txt.location     = (_x, _y, _h + 1.5)
+    _txt.rotation_euler = (0.0, 0.0, 0.0)   # 朝上，俯视可读
+
 # ── 道路（仅可视化参考，不导出坐标）────────────────────────────────────────
 for _i, _r in enumerate(_roads):
     if _r.get("type", "straight") != "straight":
@@ -238,12 +248,14 @@ for _obj in bpy.data.objects:
     except (IndexError, ValueError):
         continue
     # matrix_world 包含父对象变换（若有），更准确
-    _t = _obj.matrix_world.translation
-    _r = _obj.matrix_world.to_euler()[2]           # Z 轴旋转（弧度）
+    _t   = _obj.matrix_world.translation
+    _r   = _obj.matrix_world.to_euler()[2]         # Z 轴旋转（弧度）
+    _h_m = round(float(_obj.dimensions.z), 2)      # 当前高度（含用户修改）
     _out[str(_idx)] = {{
         "x":            round(float(_t.x), 2),
         "y":            round(float(_t.y), 2),
         "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
+        "height_m":     _h_m,
     }}
 
 _path = _get_script_dir() / "{name}_positions.json"
@@ -294,10 +306,14 @@ def main():
     print(f"     Windows: & \"C:\\Program Files\\Blender Foundation\\Blender X.X\\blender.exe\" --python {setup_path}")
     print(f"     Linux/Mac: blender --python {setup_path}")
     print(f"")
-    print(f"2. 在 Blender 中手动移动/旋转建筑物（G 移动，R 旋转，X/Y 锁轴）")
+    print(f"2. 在 Blender 中手动调整建筑物：")
+    print(f"   - G 移动，R 旋转，X/Y 锁轴（调整平面位置）")
+    print(f"   - 修改高度：选中建筑 → N 键打开 Item 面板 → 修改 Dimensions Z")
+    print(f"     或：选中建筑 S → Z → 输入数值 → Enter")
+    print(f"   注：标注文字显示初始高度，修改后以 Dimensions Z 为准")
     print(f"3. 同样在 Blender Scripting 标签页中：Open → {extract_path} → ▶ Run Script")
     print(f"4. python blender_to_json.py {name}")
-    print(f"   （加 --render 参数可自动重新生成俯视图）")
+    print(f"   （位置、旋转、高度均自动写回 JSON，并重新生成 3D 场景和俯视图）")
     print("──────────────────────────────────────────────────────────────────────")
 
 
