@@ -10,7 +10,8 @@ blender_to_json.py — 将 Blender 导出的建筑物位置写回场景 JSON。
 
 读取:
     blender_scenes/{name}_positions.json        由 Blender 导出脚本生成
-    simple_scene/{name}/scene_description.json  原始场景（回退到 text_prompt_json/）
+    text_prompt_json/{name}.json                AI-1 完整格式（优先）
+    simple_scene/{name}/scene_description.json  回退来源
 
 输出:
     simple_scene/{name}/scene_description.json  原地更新建筑坐标
@@ -30,15 +31,15 @@ from overlap_checker import check_overlaps
 # 辅助函数
 # ---------------------------------------------------------------------------
 
-def _load_full(name: str) -> tuple[dict, Path]:
-    """读取原始场景 JSON，返回 (full_data, source_path)。"""
+def _load_full(name: str) -> dict:
+    """读取 AI-1 完整格式 JSON（含 intent/location/tx/rx/rt/explanation/材质）。"""
     candidates = [
+        Path("text_prompt_json") / f"{name}.json",      # AI-1 完整格式，优先
         Path("simple_scene") / name / "scene_description.json",
-        Path("text_prompt_json") / f"{name}.json",
     ]
     for p in candidates:
         if p.exists():
-            return json.loads(p.read_text(encoding="utf-8")), p
+            return json.loads(p.read_text(encoding="utf-8"))
     raise FileNotFoundError(
         f"找不到场景 '{name}' 的 JSON 文件。\n"
         f"请先运行 main.py 生成场景，或确认文件路径正确。"
@@ -64,8 +65,8 @@ def main():
         sys.exit(1)
     positions = json.loads(pos_path.read_text(encoding="utf-8"))
 
-    # ── 读取原始场景 JSON ────────────────────────────────────────────────────
-    full, src_path = _load_full(name)
+    # ── 读取原始场景 JSON（AI-1 完整格式）───────────────────────────────────
+    full      = _load_full(name)
     scene     = full.get("scene", full)
     buildings = scene.get("buildings", [])
 
@@ -112,19 +113,30 @@ def main():
     else:
         print("[blender_to_json] ✓ 无重叠检测到。")
 
-    # ── 写回 scene_description.json ──────────────────────────────────────────
+    # ── 更新内存中的 scene 引用 ───────────────────────────────────────────────
     if "scene" in full:
         full["scene"] = scene
-    src_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[blender_to_json] 已更新：{src_path}")
 
-    # ── 保存到 text_prompt_json/（覆盖原文件）────────────────────────────────
+    # ── 保存到 text_prompt_json/（AI-1 完整格式，含材质/tx/rx/rt/explanation）
     out_path = Path("text_prompt_json") / f"{name}.json"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[blender_to_json] 已保存：{out_path}")
+    print(f"[blender_to_json] 已保存（AI-1 完整格式）：{out_path}")
 
-    # ── 无重叠时保存到 example_json/（覆盖原文件）────────────────────────────
+    # ── 同步 scene_description.json（只更新 scene 字段，保留其余格式）────────
+    scene_desc_path = Path("simple_scene") / name / "scene_description.json"
+    if scene_desc_path.exists():
+        try:
+            scene_desc = json.loads(scene_desc_path.read_text(encoding="utf-8"))
+            scene_desc["scene"] = scene
+            scene_desc_path.write_text(
+                json.dumps(scene_desc, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            print(f"[blender_to_json] 已同步：{scene_desc_path}")
+        except Exception as e:
+            print(f"[blender_to_json] 警告：scene_description.json 同步失败：{e}")
+
+    # ── 无重叠时保存到 example_json/（AI-1 完整格式）─────────────────────────
     if not overlaps:
         ex_path = Path("example_json") / f"{name}.json"
         ex_path.parent.mkdir(exist_ok=True)
