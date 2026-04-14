@@ -73,9 +73,29 @@ blender_scenes/{name}_setup.py  —  在 Blender 中运行以导入场景 "{name
 import bpy, math, json
 from pathlib import Path
 
+# ── 定位脚本目录（兼容命令行和 Blender Scripting 标签页两种方式）──────────
+def _get_script_dir():
+    # 方式 1：命令行 blender --python xxx.py，__file__ 是完整路径
+    try:
+        p = Path(__file__).resolve()
+        if p.is_file():
+            return p.parent
+    except NameError:
+        pass
+    # 方式 2：Blender Scripting 标签页，从当前打开的文本获取路径
+    try:
+        fp = bpy.context.space_data.text.filepath
+        if fp:
+            return Path(fp).resolve().parent
+    except Exception:
+        pass
+    raise RuntimeError(
+        "无法定位脚本目录。\\n"
+        "请在 Blender Scripting 标签页中用 Open 打开此脚本文件后再运行。"
+    )
+
 # ── 读取场景数据 ────────────────────────────────────────────────────────────
-# 用 __file__ 定位，避免 Blender 工作目录不是项目根目录的问题
-_data_file = Path(__file__).parent / "{name}_data.json"
+_data_file = _get_script_dir() / "{name}_data.json"
 if not _data_file.exists():
     raise FileNotFoundError(f"找不到 {{_data_file}}，请先运行 to_blender.py")
 _sc        = json.loads(_data_file.read_text(encoding="utf-8"))
@@ -190,6 +210,25 @@ blender_scenes/{name}_extract.py  —  在 Blender 脚本编辑器中运行
 import bpy, math, json
 from pathlib import Path
 
+# ── 定位脚本目录（兼容命令行和 Blender Scripting 标签页两种方式）──────────
+def _get_script_dir():
+    try:
+        p = Path(__file__).resolve()
+        if p.is_file():
+            return p.parent
+    except NameError:
+        pass
+    try:
+        fp = bpy.context.space_data.text.filepath
+        if fp:
+            return Path(fp).resolve().parent
+    except Exception:
+        pass
+    raise RuntimeError(
+        "无法定位脚本目录。\\n"
+        "请在 Blender Scripting 标签页中用 Open 打开此脚本文件后再运行。"
+    )
+
 _out = {{}}
 for _obj in bpy.data.objects:
     if not _obj.name.startswith("building_"):
@@ -207,7 +246,7 @@ for _obj in bpy.data.objects:
         "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
     }}
 
-_path = Path(__file__).parent / "{name}_positions.json"
+_path = _get_script_dir() / "{name}_positions.json"
 _path.parent.mkdir(parents=True, exist_ok=True)
 _path.write_text(json.dumps(_out, indent=2, ensure_ascii=False), encoding="utf-8")
 print(f"[extract] {{len(_out)}} 栋建筑已导出到 {{_path}}")
