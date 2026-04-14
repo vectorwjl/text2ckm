@@ -74,14 +74,15 @@ def main():
                 print(f"  {ov['a_desc']}  ×  {ov['b_desc']}  "
                       f"({ov['overlap_area_m2']:.2f} m²，重心 {ov['overlap_centroid']})")
 
-            # 自动生成 Blender 脚本文件
-            _to_blender.BLENDER_SCENES_DIR.mkdir(exist_ok=True)
-            (_to_blender.BLENDER_SCENES_DIR / f"{name}_data.json").write_text(
+            # 自动生成 Blender 脚本文件（存入 blender_scenes/{name}/ 子目录）
+            _blender_scene_dir = _to_blender.BLENDER_SCENES_DIR / name
+            _blender_scene_dir.mkdir(parents=True, exist_ok=True)
+            (_blender_scene_dir / f"{name}_data.json").write_text(
                 json.dumps(scene_data, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            setup_path = _to_blender.BLENDER_SCENES_DIR / f"{name}_setup.py"
+            setup_path = _blender_scene_dir / f"{name}_setup.py"
             setup_path.write_text(_to_blender._setup_script(name), encoding="utf-8")
-            extract_path = _to_blender.BLENDER_SCENES_DIR / f"{name}_extract.py"
+            extract_path = _blender_scene_dir / f"{name}_extract.py"
             extract_path.write_text(_to_blender._extract_script(name), encoding="utf-8")
 
             print(f"[main] Blender 脚本已生成，请按以下步骤手动调整后继续：")

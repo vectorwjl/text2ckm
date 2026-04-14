@@ -58,7 +58,7 @@ def main():
     name = sys.argv[1]
 
     # ── 读取 Blender 导出的位置 ──────────────────────────────────────────────
-    pos_path = Path("blender_scenes") / f"{name}_positions.json"
+    pos_path = Path("blender_scenes") / name / f"{name}_positions.json"
     if not pos_path.exists():
         print(f"[blender_to_json] 错误：找不到 {pos_path}")
         print("请先在 Blender 脚本编辑器中运行对应的 _extract.py 脚本。")

@@ -276,16 +276,19 @@ def main():
         sys.exit(1)
 
     name, scene, _ = _load_scene(sys.argv[1])
-    BLENDER_SCENES_DIR.mkdir(exist_ok=True)
+
+    # 每个场景存入独立子目录 blender_scenes/{name}/
+    scene_dir = BLENDER_SCENES_DIR / name
+    scene_dir.mkdir(parents=True, exist_ok=True)
 
     # 保存场景数据 JSON（供 Blender 脚本读取）
-    data_path = BLENDER_SCENES_DIR / f"{name}_data.json"
+    data_path = scene_dir / f"{name}_data.json"
     data_path.write_text(json.dumps(scene, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    setup_path = BLENDER_SCENES_DIR / f"{name}_setup.py"
+    setup_path = scene_dir / f"{name}_setup.py"
     setup_path.write_text(_setup_script(name), encoding="utf-8")
 
-    extract_path = BLENDER_SCENES_DIR / f"{name}_extract.py"
+    extract_path = scene_dir / f"{name}_extract.py"
     extract_path.write_text(_extract_script(name), encoding="utf-8")
 
     n_b = len(scene.get("buildings", []))
