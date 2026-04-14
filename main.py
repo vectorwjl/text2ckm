@@ -68,14 +68,17 @@ def main():
         json_path.write_text(json.dumps(result_with_material, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[main] JSON saved: {json_path}")
 
-        # 循环只在无重叠时退出，直接保存至示例目录
-        EXAMPLE_JSON_DIR.mkdir(exist_ok=True)
-        example_path = EXAMPLE_JSON_DIR / f"{name}.json"
-        example_path.write_text(
-            json.dumps(result_with_material, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        print(f"[main] 无重叠，JSON已保存至示例目录: {example_path}")
+        # 只有完全无重叠时才保存至示例目录
+        if resolve_report["converged"]:
+            EXAMPLE_JSON_DIR.mkdir(exist_ok=True)
+            example_path = EXAMPLE_JSON_DIR / f"{name}.json"
+            example_path.write_text(
+                json.dumps(result_with_material, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[main] No overlaps — JSON saved to example_json: {example_path}")
+        else:
+            print(f"[main] Skipping example_json (residual overlaps remain).")
 
         scene_data = result.get("scene", {"buildings": [], "roads": []})
         tx_params = result.get("tx", {})
