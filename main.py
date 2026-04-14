@@ -9,8 +9,7 @@ from step1_text_to_json import text_to_scene_json, detect_style, SKILLS_DIR
 from step2_json_to_scene import generate_scene
 from step3_render_topdown import render_topdown
 from step4_path_gain import generate_path_gain
-from overlap_checker import check_overlaps, format_overlap_feedback
-from overlap_resolver import resolve_overlaps, format_resolution_feedback
+from overlap_resolver import iteratively_resolve
 
 EXAMPLE_JSON_DIR = Path("example_json")
 
@@ -27,47 +26,29 @@ def main():
         print(f"[main] Processing: {name}")
         print(f"{'='*50}")
 
-        # Step 1: text → JSON（含重叠检测重试）
+        # Step 1: text → JSON（AI-1 只调用一次，后续由算法直接修改场景）
         text = txt_file.read_text(encoding="utf-8")
         style = detect_style(text)
-        retry_text = text
-        result = None
-        attempt = 0
-        while True:
-            print(f"[main] Calling DeepSeek API (attempt {attempt + 1})...")
-            result = text_to_scene_json(retry_text)
-            scene_check = result.get("scene", {})
-            overlaps = check_overlaps(scene_check)
+        print(f"[main] Calling DeepSeek API (single-shot)...")
+        result = text_to_scene_json(text)
+        scene_for_resolver = result.get("scene", {})
 
-            if not overlaps:
-                if attempt > 0:
-                    print(f"[main] Overlaps resolved on attempt {attempt + 1}.")
-                else:
-                    print(f"[main] No overlaps detected.")
-                break
-
-            # 有重叠则继续重试（无上限）
-            feedback = format_overlap_feedback(overlaps)
-            scene_for_resolver = result.get("scene", {})
-            moves = resolve_overlaps(scene_for_resolver, overlaps, style=style)
-            resolution_feedback = format_resolution_feedback(
-                scene_for_resolver, overlaps, moves
+        # 算法直接修改 scene_data 的建筑 x, y，直至无重叠
+        resolve_report = iteratively_resolve(scene_for_resolver, style=style)
+        if resolve_report["converged"]:
+            if resolve_report["iterations"] == 0:
+                print("[main] No overlaps detected.")
+            else:
+                print(
+                    f"[main] Overlaps resolved by algorithm in "
+                    f"{resolve_report['iterations']} iteration(s); "
+                    f"{len(resolve_report['moved_indices'])} building(s) moved."
+                )
+        else:
+            print(
+                f"[main] WARNING: {len(resolve_report['final_overlaps'])} "
+                f"overlap(s) remain after {resolve_report['iterations']} iterations."
             )
-            print(f"[main] {len(overlaps)} overlap(s) detected. Retrying with feedback...")
-            print(f"[main] --- Overlap feedback sent to AI-1 ---")
-            print(feedback)
-            if resolution_feedback:
-                print(resolution_feedback)
-            print(f"[main] --- End of overlap feedback ---")
-            scene_json_str = json.dumps(scene_for_resolver, ensure_ascii=False, indent=2)
-            retry_text = (
-                text + "\n\n"
-                + "=== 当前生成的场景JSON（所有建筑/道路坐标，供参考）===\n"
-                + scene_json_str + "\n\n"
-                + feedback
-                + ("\n" + resolution_feedback if resolution_feedback else "")
-            )
-            attempt += 1
 
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)
