@@ -5,14 +5,14 @@ to_blender.py — 将场景 JSON 导出为 Blender 可编辑脚本。
     python to_blender.py <scene_name>
     python to_blender.py text_prompt_json/scene_01.json
 
-输出目录: blender_scenes/
+输出目录: blender_scenes/{name}/
     {name}_data.json     场景数据（Blender 脚本读取此文件）
     {name}_setup.py      在 Blender 中运行：导入并显示场景
     {name}_extract.py    在 Blender 中运行：导出调整后的建筑位置
 
 完整工作流:
     1. python to_blender.py <name>
-    2. blender --python blender_scenes/{name}_setup.py
+    2. blender --python blender_scenes/{name}/{name}_setup.py
        （或在 Blender GUI > Scripting 标签页中运行）
     3. 在 Blender 中手动移动建筑物（G 移动 / R 旋转 / X|Y 锁轴）
     4. 在 Blender 脚本编辑器中运行 {name}_extract.py
@@ -62,13 +62,13 @@ def _load_scene(name_or_path: str) -> tuple[str, dict, dict]:
 def _setup_script(name: str) -> str:
     return f'''\
 """
-blender_scenes/{name}_setup.py  —  在 Blender 中运行以导入场景 "{name}"
+blender_scenes/{name}/{name}_setup.py  —  在 Blender 中运行以导入场景 "{name}"
 
 用法（选其一）：
-    blender --python blender_scenes/{name}_setup.py
+    blender --python blender_scenes/{name}/{name}_setup.py
     或：打开 Blender > Scripting 标签页，粘贴本文件内容并执行
 
-编辑完成后运行：blender_scenes/{name}_extract.py
+编辑完成后运行：blender_scenes/{name}/{name}_extract.py
 """
 import bpy, math, json
 from pathlib import Path
@@ -200,7 +200,7 @@ for _area in bpy.context.screen.areas:
         break
 
 print(f"[setup] 场景 '{name}' 已加载：{{len(_buildings)}} 栋建筑，{{len(_roads)}} 条道路。")
-print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{name}_extract.py")
+print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{name}/{name}_extract.py")
 '''
 
 
@@ -211,10 +211,10 @@ print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{na
 def _extract_script(name: str) -> str:
     return f'''\
 """
-blender_scenes/{name}_extract.py  —  在 Blender 脚本编辑器中运行
+blender_scenes/{name}/{name}_extract.py  —  在 Blender 脚本编辑器中运行
 
-将场景中所有 building_N 对象的位置和旋转导出为 JSON。
-输出：blender_scenes/{name}_positions.json
+将场景中所有 building_N 对象的位置、旋转和高度导出为 JSON。
+输出：blender_scenes/{name}/{name}_positions.json
 之后运行：python blender_to_json.py {name}
 """
 import bpy, math, json

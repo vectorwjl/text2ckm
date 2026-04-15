@@ -9,6 +9,7 @@ from step1_text_to_json import text_to_scene_json
 from step2_json_to_scene import generate_scene
 from step3_render_topdown import render_topdown
 from step4_path_gain import generate_path_gain
+from step5_scene_maps import generate_scene_maps
 from overlap_checker import check_overlaps
 import to_blender as _to_blender
 
@@ -151,6 +152,13 @@ def main():
         except Exception as e:
             print(f"[main] ERROR: Path gain generation failed: {e}")
             raise
+
+        # Step 5: 多通道场景地图（高度图/材质图/LOS图）
+        maps_dir = str(Path("scene_maps") / name)
+        try:
+            generate_scene_maps(str(scene_desc_path), maps_dir)
+        except Exception as e:
+            print(f"[main] WARNING: Scene maps generation failed: {e}")
 
         print(f"[main] Done: {name}")
 
