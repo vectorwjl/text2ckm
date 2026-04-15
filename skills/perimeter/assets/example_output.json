@@ -2,35 +2,33 @@
   "intent": "scene_generation",
   "scene": {
     "buildings": [
-      {
-        "type": "u_shaped",
-        "x": -65.00, "y": 0.00,
-        "height": 18.00,
-        "outer_width": 52.00, "outer_length": 52.00,
-        "inner_width": 30.00, "inner_length": 30.00,
-        "material": "concrete",
-        "rotation_deg": 0.00
-      },
-      {
-        "type": "u_shaped",
-        "x": 65.00, "y": 0.00,
-        "height": 22.50,
-        "outer_width": 56.00, "outer_length": 48.00,
-        "inner_width": 31.00, "inner_length": 27.00,
-        "material": "concrete",
-        "rotation_deg": 0.01
-      }
+      {"type": "rectangular", "x": -47.00, "y":  20.00, "height": 18.00, "width": 14.00, "length": 10.00, "material": "concrete", "rotation_deg":  0.00},
+      {"type": "rectangular", "x": -22.00, "y":  19.50, "height": 21.00, "width": 16.00, "length": 11.00, "material": "concrete", "rotation_deg":  0.01},
+      {"type": "rectangular", "x": -47.00, "y": -19.00, "height": 24.00, "width": 13.00, "length": 12.00, "material": "concrete", "rotation_deg":  0.02},
+      {"type": "rectangular", "x": -22.00, "y": -18.50, "height": 27.00, "width": 15.00, "length": 13.00, "material": "concrete", "rotation_deg":  0.03},
+      {"type": "rectangular", "x": -18.00, "y": -12.50, "height": 30.00, "width": 12.00, "length": 17.00, "material": "concrete", "rotation_deg": 90.00},
+      {"type": "rectangular", "x": -18.50, "y":  12.50, "height": 33.00, "width": 14.00, "length": 18.00, "material": "concrete", "rotation_deg": 90.01},
+      {"type": "rectangular", "x": -52.00, "y": -12.50, "height": 36.00, "width": 11.00, "length": 15.00, "material": "concrete", "rotation_deg": 90.02},
+      {"type": "rectangular", "x": -51.50, "y":  12.50, "height": 39.00, "width": 12.00, "length": 16.00, "material": "concrete", "rotation_deg": 90.03},
+      {"type": "rectangular", "x":  22.00, "y":  20.00, "height": 42.00, "width": 14.00, "length": 10.00, "material": "concrete", "rotation_deg":  0.04},
+      {"type": "rectangular", "x":  47.00, "y":  19.00, "height": 45.00, "width": 16.00, "length": 12.00, "material": "concrete", "rotation_deg":  0.05},
+      {"type": "rectangular", "x":  22.00, "y": -19.50, "height": 48.00, "width": 13.00, "length": 11.00, "material": "concrete", "rotation_deg":  0.06},
+      {"type": "rectangular", "x":  47.00, "y": -18.50, "height": 51.00, "width": 15.00, "length": 13.00, "material": "concrete", "rotation_deg":  0.07},
+      {"type": "rectangular", "x":  51.00, "y": -12.50, "height": 54.00, "width": 12.00, "length": 17.00, "material": "concrete", "rotation_deg": 90.04},
+      {"type": "rectangular", "x":  50.00, "y":  12.50, "height": 57.00, "width": 14.00, "length": 19.00, "material": "concrete", "rotation_deg": 90.05},
+      {"type": "rectangular", "x":  17.00, "y": -12.50, "height": 60.00, "width": 11.00, "length": 15.00, "material": "concrete", "rotation_deg": 90.06},
+      {"type": "rectangular", "x":  18.50, "y":  12.50, "height": 63.00, "width": 13.00, "length": 18.00, "material": "concrete", "rotation_deg": 90.07}
     ],
     "roads": [
-      {"type": "straight", "start": [-115.00,  35.00], "end": [115.00,  35.00], "width": 9.00, "material": "marble"},
-      {"type": "straight", "start": [-115.00, -35.00], "end": [115.00, -35.00], "width": 9.00, "material": "marble"},
-      {"type": "straight", "start": [-100.00, -55.00], "end": [-100.00, 55.00], "width": 9.00, "material": "marble"},
-      {"type": "straight", "start": [   0.00, -55.00], "end": [   0.00, 55.00], "width": 9.00, "material": "marble"},
-      {"type": "straight", "start": [ 100.00, -55.00], "end": [ 100.00, 55.00], "width": 9.00, "material": "marble"}
+      {"type": "straight", "start": [-89.00,  34.50], "end": [ 89.00,  34.50], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [-89.00, -34.50], "end": [ 89.00, -34.50], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [-69.00, -54.50], "end": [-69.00,  54.50], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [  0.00, -54.50], "end": [  0.00,  54.50], "width": 9.00, "material": "marble"},
+      {"type": "straight", "start": [ 69.00, -54.50], "end": [ 69.00,  54.50], "width": 9.00, "material": "marble"}
     ]
   },
   "tx": {"power_dbm": 30.00, "frequency_ghz": 3.50, "z": 12.00},
   "rx": {"rx_height": 1.50},
-  "rt": {"map_size_m": 260.00},
-  "explanation": "周边式围合布局：2个街区，每块一栋U形建筑三面围合内庭院，内庭院完全留空，外围道路包围街区。"
+  "rt": {"map_size_m": 200.00},
+  "explanation": "周边式围合布局：2个街区（各60m×60m），每个街区四侧各2栋矩形建筑沿周边排列，内庭院完全留空，5条直线道路（宽9m）围合街区，建筑距道路边缘5m，高度18–63m各不相同。"
 }
