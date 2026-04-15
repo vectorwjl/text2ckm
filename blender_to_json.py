@@ -5,19 +5,20 @@ blender_to_json.py — 将 Blender 导出的建筑物位置写回场景 JSON。
     python blender_to_json.py <scene_name>
 
 前置条件:
-    先在 Blender 中运行 blender_scenes/{name}_extract.py，
-    生成 blender_scenes/{name}_positions.json。
+    先在 Blender 中运行 blender_scenes/{name}/{name}_extract.py，
+    生成 blender_scenes/{name}/{name}_positions.json。
 
 读取:
-    blender_scenes/{name}_positions.json        由 Blender 导出脚本生成
-    text_prompt_json/{name}.json                AI-1 完整格式（优先）
-    simple_scene/{name}/scene_description.json  回退来源
+    blender_scenes/{name}/{name}_positions.json   由 Blender 导出脚本生成
+    text_prompt_json/{name}.json                  AI-1 完整格式（优先）
+    simple_scene/{name}/scene_description.json    回退来源
 
 输出:
     simple_scene/{name}/scene_description.json  原地更新建筑坐标
     text_prompt_json/{name}.json                覆盖原 JSON
     example_json/{name}.json                    仅当无重叠时覆盖
     3D_scene/{name}.png                         覆盖俯视图
+    scene_maps/{name}/                          三通道场景地图
 """
 
 import json
@@ -143,12 +144,13 @@ def main():
         ex_path.write_text(json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[blender_to_json] 无重叠 JSON 已保存：{ex_path}")
 
-    # ── 重新生成 3D 场景 + 俯视图 + path_gain ────────────────────────────────
+    # ── 重新生成 3D 场景 + 俯视图 + path_gain + 场景地图 ─────────────────────
     print("\n[blender_to_json] 重新生成 3D 场景…")
     try:
         from step2_json_to_scene import generate_scene
         from step3_render_topdown import render_topdown
         from step4_path_gain import generate_path_gain
+        from step5_scene_maps import generate_scene_maps
 
         tx_params = full.get("tx", {})
         rx_params = full.get("rx", {})
@@ -183,6 +185,10 @@ def main():
             rt_params=rt_params,
         )
         print(f"[blender_to_json] Path gain 已保存：{photo_path}")
+
+        maps_dir = str(Path("scene_maps") / name)
+        generate_scene_maps(str(scene_desc_path), maps_dir)
+        print(f"[blender_to_json] 场景地图已保存：{maps_dir}")
     except Exception as e:
         print(f"[blender_to_json] 场景生成失败（可手动运行 main.py）：{e}")
 
