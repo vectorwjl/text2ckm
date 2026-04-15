@@ -56,23 +56,37 @@ _COORDS = np.linspace(
 
 # 材质名称 → 整数编码（0 保留给无建筑的地面）
 MATERIAL_ENCODING = {
-    "ground":   0,
-    "concrete": 1,
-    "marble":   2,
-    "metal":    3,
-    "wood":     4,
-    "glass":    5,
+    "ground":        0,
+    "concrete":      1,
+    "marble":        2,
+    "metal":         3,
+    "wood":          4,
+    "glass":         5,
+    "brick":         6,
+    "plasterboard":  7,
+    "ceiling_board": 8,
+    "chipboard":     9,
+    "plywood":       10,
+    "floorboard":    11,
 }
-MATERIAL_MAX = 5  # 用于归一化
+MATERIAL_MAX = 11  # 用于归一化
 
 # 可视化色板
 _HEIGHT_CMAP = "gray"
-_MATERIAL_COLORS = ["#888888",  # 0: ground — 灰色
-                    "#B0B0B0",  # 1: concrete — 浅灰
-                    "#C8A96E",  # 2: marble — 米黄
-                    "#5A8FC3",  # 3: metal — 钢蓝
-                    "#8B5E3C",  # 4: wood — 木棕
-                    "#7EC8D6"]  # 5: glass — 冰蓝
+_MATERIAL_COLORS = [
+    "#888888",  #  0: ground        — 中灰
+    "#B0B0B0",  #  1: concrete      — 浅灰
+    "#C8A96E",  #  2: marble        — 米黄
+    "#4A7FB5",  #  3: metal         — 钢蓝
+    "#8B5E3C",  #  4: wood          — 木棕
+    "#7EC8D6",  #  5: glass         — 冰蓝
+    "#A04020",  #  6: brick         — 砖红
+    "#E8E0D0",  #  7: plasterboard  — 米白
+    "#D8D8D8",  #  8: ceiling_board — 近白
+    "#B08040",  #  9: chipboard     — 棕褐
+    "#C8A060",  # 10: plywood       — 浅木色
+    "#784020",  # 11: floorboard    — 深木色
+]
 _MATERIAL_CMAP = mcolors.ListedColormap(_MATERIAL_COLORS)
 _LOS_CMAP = mcolors.ListedColormap(["#D63031", "#00B894"])  # 红=遮挡, 绿=直视
 
@@ -227,9 +241,10 @@ def _save_material_png(material_raw_int: np.ndarray, path: str) -> None:
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
     cbar = plt.colorbar(im, ax=ax, ticks=list(range(MATERIAL_MAX + 1)))
-    cbar.ax.set_yticklabels(
-        ["ground", "concrete", "marble", "metal", "wood", "glass"]
-    )
+    cbar.ax.set_yticklabels([
+        "ground", "concrete", "marble", "metal", "wood", "glass",
+        "brick", "plasterboard", "ceiling_board", "chipboard", "plywood", "floorboard",
+    ])
     plt.tight_layout()
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)

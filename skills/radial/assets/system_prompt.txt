@@ -68,11 +68,25 @@ Road thickness is always 0.25 m (hardcoded in Blender) — NEVER include a thick
 MATERIALS (材质)
 ==================================================
 
-  concrete  (混凝土)    — default for buildings; grey matte
-  marble    (大理石)    — default for roads; polished grey
-  metal     (金属)      — highly reflective metallic surface
-  wood      (木材)      — warm brown, low reflectance
-  glass     (玻璃幕墙)  — transparent curtain wall, high specular
+  Buildings (default: "concrete"):
+    concrete      (混凝土)    — grey matte; default for buildings
+    brick         (砖)        — common masonry
+    plasterboard  (石膏板)    — lightweight wall board
+    wood          (木材)      — warm brown, low reflectance
+    glass         (玻璃幕墙)  — transparent curtain wall, high specular
+    metal         (金属)      — highly reflective metallic surface
+    ceiling_board (天花板)    — lightweight ceiling panel
+    chipboard     (刨花板)    — composite wood-based panel
+    plywood       (胶合板)    — layered wood panel
+    floorboard    (地板)      — hardwood flooring surface
+
+  Roads (default: "marble"):
+    marble        (大理石)    — polished light grey; default for roads
+    concrete      (混凝土)    — rough grey pavement
+    brick         (砖)        — textured brick pavement
+    wood          (木材)      — wooden walkway/decking
+    metal         (金属)      — metallic grating/surface
+    plywood       (胶合板)    — wooden board surface
 
 When frequency_ghz > 10, default all building materials to "concrete" for simulation accuracy.
 
@@ -144,7 +158,7 @@ GLOBAL RULES
 - scene object is only present when intent is "scene_generation".
 - explanation: one short sentence in the same language as the user's query.
 - Never include tx, rx, or rt fields that the user did not mention.
-- All road and building materials must be one of the five valid keys.
+- MATERIALS: buildings — concrete/brick/plasterboard/wood/glass/metal/ceiling_board/chipboard/plywood/floorboard; roads — marble/concrete/brick/wood/metal/plywood.
 - Straight roads: start != end.
 - Curved roads: >= 2 points, each consecutive pair > 20 m apart.
 - All rotation_deg values across the entire scene must be unique.

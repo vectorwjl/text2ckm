@@ -15,83 +15,158 @@ ITU_MATERIAL_FREQUENCY_RANGE = {
 
 # Material mapping for different frequency ranges
 GROUND_MATERIAL_MAP = {
-    "low_freq": {  # 1-10 GHz: Use ITU ground materials
-        "wet_ground": "mat-itu_wet_ground",
-        "dry_ground": "mat-itu_dry_ground",  # If available
-        "icy": "mat-itu_icy",  # If available
+    "low_freq": {  # 1-10 GHz: ITU ground materials
+        "wet_ground":        "mat-itu_wet_ground",
+        "medium_dry_ground": "mat-itu_medium_dry_ground",
+        "very_dry_ground":   "mat-itu_very_dry_ground",
     },
-    "high_freq": {  # > 10 GHz: Use concrete as fallback
-        "wet_ground": "mat-itu_concrete",
-        "dry_ground": "mat-itu_concrete",
-        "icy": "mat-itu_concrete",
+    "high_freq": {  # > 10 GHz: concrete fallback
+        "wet_ground":        "mat-itu_concrete",
+        "medium_dry_ground": "mat-itu_concrete",
+        "very_dry_ground":   "mat-itu_concrete",
     }
 }
 
-# Other materials that work across all frequencies
+# Materials that work across all frequencies (buildings + roads)
 UNIVERSAL_MATERIALS = {
-    "concrete": "mat-itu_concrete",
-    "marble": "mat-itu_marble",
-    "metal": "mat-itu_metal",
-    "wood": "mat-itu_wood",
-    "glass": "mat-itu_glass",
+    "concrete":      "mat-itu_concrete",
+    "brick":         "mat-itu_brick",
+    "plasterboard":  "mat-itu_plasterboard",
+    "wood":          "mat-itu_wood",
+    "glass":         "mat-itu_glass",
+    "ceiling_board": "mat-itu_ceiling_board",
+    "chipboard":     "mat-itu_chipboard",
+    "plywood":       "mat-itu_plywood",
+    "marble":        "mat-itu_marble",
+    "floorboard":    "mat-itu_floorboard",
+    "metal":         "mat-itu_metal",
 }
 
 # Complete material properties for all materials
-# Used for XML generation in Sionna RT
+# Conductivity and permittivity values are at 1 GHz reference (ITU-R P.2040).
+# Sionna RT uses the material name to apply frequency-dependent ITU formulas internally.
 MATERIAL_PROPERTIES = {
+    # ── Buildings / Roads ─────────────────────────────────────────────────────
     "mat-itu_concrete": {
-        "conductivity": "0.0",
-        "permittivity": "5.31",
+        "conductivity": "0.0462",
+        "permittivity": "5.24",
         "permeability": "1.0",
-        "color": "0.539479 0.539479 0.539480"
+        "color": "0.539479 0.539479 0.539480"   # grey
+    },
+    "mat-itu_brick": {
+        "conductivity": "0.0238",
+        "permittivity": "3.91",
+        "permeability": "1.0",
+        "color": "0.65 0.30 0.20"               # brick red
+    },
+    "mat-itu_plasterboard": {
+        "conductivity": "0.0085",
+        "permittivity": "2.73",
+        "permeability": "1.0",
+        "color": "0.95 0.93 0.88"               # off-white
+    },
+    "mat-itu_wood": {
+        "conductivity": "0.0047",
+        "permittivity": "1.99",
+        "permeability": "1.0",
+        "color": "0.55 0.35 0.18"               # warm brown
+    },
+    "mat-itu_glass": {
+        "conductivity": "0.0036",
+        "permittivity": "6.31",
+        "permeability": "1.0",
+        "color": "0.7 0.8 0.85"                 # ice blue
+    },
+    "mat-itu_ceiling_board": {
+        "conductivity": "0.0011",
+        "permittivity": "1.48",
+        "permeability": "1.0",
+        "color": "0.95 0.95 0.95"               # near-white
+    },
+    "mat-itu_chipboard": {
+        "conductivity": "0.0217",
+        "permittivity": "2.58",
+        "permeability": "1.0",
+        "color": "0.70 0.55 0.35"               # tan
+    },
+    "mat-itu_plywood": {
+        "conductivity": "0.33",
+        "permittivity": "2.71",
+        "permeability": "1.0",
+        "color": "0.80 0.65 0.40"               # light wood
     },
     "mat-itu_marble": {
-        "conductivity": "0.0",
-        "permittivity": "7.075",
+        "conductivity": "0.0055",
+        "permittivity": "7.074",
         "permeability": "1.0",
-        "color": "0.701101 0.644479 0.485150"
+        "color": "0.701101 0.644479 0.485150"   # beige
+    },
+    "mat-itu_floorboard": {
+        "conductivity": "0.0044",
+        "permittivity": "3.66",
+        "permeability": "1.0",
+        "color": "0.60 0.40 0.20"               # dark wood
     },
     "mat-itu_metal": {
         "conductivity": "1e7",
         "permittivity": "1.0",
         "permeability": "1.0",
-        "color": "0.219526 0.219526 0.254152"
+        "color": "0.219526 0.219526 0.254152"   # steel blue-grey
     },
-    "mat-itu_wood": {
-        "conductivity": "0.0",
-        "permittivity": "1.99",
+    # ── Ground only (1–10 GHz; falls back to concrete above 10 GHz) ──────────
+    "mat-itu_very_dry_ground": {
+        "conductivity": "0.00015",
+        "permittivity": "3.0",
         "permeability": "1.0",
-        "color": "0.043 0.58 0.184"
+        "color": "0.85 0.78 0.58"               # pale sand
     },
-    "mat-itu_glass": {
-        "conductivity": "0.0",
-        "permittivity": "6.0",
+    "mat-itu_medium_dry_ground": {
+        "conductivity": "0.035",
+        "permittivity": "15.0",
         "permeability": "1.0",
-        "color": "0.7 0.8 0.85"
+        "color": "0.72 0.58 0.38"               # earthy brown
     },
     "mat-itu_wet_ground": {
-        "conductivity": "0.0",
+        "conductivity": "0.15",
         "permittivity": "30.0",
         "permeability": "1.0",
-        "color": "0.91 0.569 0.055"
-    }
+        "color": "0.91 0.569 0.055"             # dark amber
+    },
 }
 
-# Bilingual material name mapping (user-friendly names to internal IDs)
+# Bilingual material name mapping (user-friendly names → internal IDs)
 MATERIAL_NAME_MAPPING = {
-    # English names
-    "glass": "mat-itu_glass",
-    "concrete": "mat-itu_concrete",
-    "marble": "mat-itu_marble",
-    "metal": "mat-itu_metal",
-    "wood": "mat-itu_wood",
-    # Chinese names
-    "玻璃": "mat-itu_glass",
+    # English
+    "concrete":      "mat-itu_concrete",
+    "brick":         "mat-itu_brick",
+    "plasterboard":  "mat-itu_plasterboard",
+    "wood":          "mat-itu_wood",
+    "glass":         "mat-itu_glass",
+    "ceiling_board": "mat-itu_ceiling_board",
+    "chipboard":     "mat-itu_chipboard",
+    "plywood":       "mat-itu_plywood",
+    "marble":        "mat-itu_marble",
+    "floorboard":    "mat-itu_floorboard",
+    "metal":         "mat-itu_metal",
+    # Chinese
     "混凝土": "mat-itu_concrete",
+    "砖":     "mat-itu_brick",
+    "砖块":   "mat-itu_brick",
+    "石膏板": "mat-itu_plasterboard",
+    "石膏":   "mat-itu_plasterboard",
+    "木材":   "mat-itu_wood",
+    "木头":   "mat-itu_wood",
+    "玻璃":   "mat-itu_glass",
+    "玻璃幕墙": "mat-itu_glass",
+    "天花板": "mat-itu_ceiling_board",
+    "吊顶":   "mat-itu_ceiling_board",
+    "刨花板": "mat-itu_chipboard",
+    "胶合板": "mat-itu_plywood",
+    "夹板":   "mat-itu_plywood",
     "大理石": "mat-itu_marble",
-    "金属": "mat-itu_metal",
-    "木材": "mat-itu_wood",
-    "木头": "mat-itu_wood",
+    "地板":   "mat-itu_floorboard",
+    "木地板": "mat-itu_floorboard",
+    "金属":   "mat-itu_metal",
 }
 
 
