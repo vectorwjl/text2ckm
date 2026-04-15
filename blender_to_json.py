@@ -126,6 +126,7 @@ def main():
 
     # ── 同步 scene_description.json（只更新 scene 字段，保留其余格式）────────
     scene_desc_path = Path("simple_scene") / name / "scene_description.json"
+    scene_desc_path.parent.mkdir(parents=True, exist_ok=True)
     if scene_desc_path.exists():
         try:
             scene_desc = json.loads(scene_desc_path.read_text(encoding="utf-8"))
@@ -136,6 +137,12 @@ def main():
             print(f"[blender_to_json] 已同步：{scene_desc_path}")
         except Exception as e:
             print(f"[blender_to_json] 警告：scene_description.json 同步失败：{e}")
+    else:
+        # scene_description.json 不存在（场景未经 main.py 生成），从 full 数据创建
+        scene_desc_path.write_text(
+            json.dumps(full, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"[blender_to_json] 已创建：{scene_desc_path}")
 
     # ── 无重叠时保存到 example_json/（AI-1 完整格式）─────────────────────────
     if not overlaps:
