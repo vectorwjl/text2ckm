@@ -36,15 +36,21 @@ BUILDING TYPES AND FIELDS
 
 All numeric fields: exactly 2 decimal places. rotation_deg is mandatory.
 
-1. u_shaped  [PRIMARY TYPE FOR PERIMETER STYLE]
-   Fields: type, x, y, height, outer_width, outer_length, inner_width, inner_length, material, rotation_deg
-   Use to wrap three sides of a block (U-shape forms open courtyard).
+ONLY TWO TYPES ARE SUPPORTED:
+
+1. rectangular  [PRIMARY TYPE FOR PERIMETER STYLE]
+   Fields: type, x, y, height, width, length, material, rotation_deg
+   - width  : dimension along LOCAL x-axis before rotation
+   - length : dimension along LOCAL y-axis before rotation
+   - Use rotation_deg=0.00 for buildings whose LONG axis runs E–W (along the north/south side of a block).
+   - Use rotation_deg=90.00 for buildings whose LONG axis runs N–S (along the east/west side of a block).
 
 2. trapezoidal
    Fields: type, x, y, height, bottom_width, top_width, length, material, rotation_deg
-   Trapezoid footprint. bottom_width >= top_width >= 6.00 m. The bottom (wider) edge
-   sits at y - length/2; the top (narrower) edge at y + length/2.
-   Typical ratio: top_width / bottom_width in [0.4, 0.85].
+   Trapezoid footprint. bottom_width >= top_width >= 6.00 m.
+   Use only if the user explicitly requests trapezoidal buildings.
+
+DO NOT USE u_shaped, l_shaped, t_shaped, or any other type — they are disabled.
 
 ==================================================
 ROAD TYPES AND FIELDS
@@ -70,69 +76,108 @@ MATERIALS
   wood      (木材)
   glass     (玻璃幕墙)
 
-When frequency_ghz > 10, default building materials to "concrete".
+When frequency_ghz > 10, default building materials to "concrete" unless user specifies otherwise.
 
 ==================================================
 LAYOUT RULE: PERIMETER / COURTYARD (周边式)
 ==================================================
 
-STEP 1 — BLOCK LAYOUT PARAMETERS
-  n_blocks  : 2–4 (choose from prompt; default 2)
-  block_size: 60–100 m per side (square blocks)
-  road_width: 7–10 m
-  setback   : building center ≥ road_width/2 + 3.00 m from road centerline
+A perimeter block = a group of rectangular buildings arranged along all 4 sides of a square block,
+leaving the inner courtyard completely empty.
 
-  Block center positions (row layout, n_blocks in a row along X):
-    block_x_k = (k - (n_blocks-1)/2) * (block_size + road_width)   k = 0..n_blocks-1
-    block_y   = 0.00
+STEP 1 — BLOCK GRID PARAMETERS
+  n_blocks  : 1–4 (read from prompt; default 2×2 = 4 blocks)
+  block_size: 60–100 m per side (square blocks; read from prompt or choose freely)
+  road_width: 7–10 m (read from prompt or default 8.00 m)
+  n_per_side: number of rectangular buildings per side (read from prompt; default 3)
 
-  For 2×2 grid (n_blocks=4):
+  Block center positions for 2×2 grid (n_blocks=4):
     centers at (±(block_size/2 + road_width/2), ±(block_size/2 + road_width/2))
 
-STEP 2 — PER-BLOCK BUILDING SELECTION
-  Option A — u_shaped (preferred, wraps 3 sides):
-    Place one u_shaped building at block center (x=block_x, y=block_y)
-    outer_width  = block_size - 2 * setback (subtract setback from both sides)
-    outer_length = block_size - 2 * setback
-    inner_width  = outer_width  * random(0.50, 0.65)
-    inner_length = outer_length * random(0.50, 0.65)
-    rotation_deg = 0.00
+  Block center positions for row of N blocks:
+    block_x_k = (k - (N-1)/2) × (block_size + road_width)   k = 0..N-1
+    block_y   = 0.00
 
-  Option B — two l_shaped buildings in opposite corners:
-    Place one l_shaped at each diagonal corner of the block.
-    Together the two L shapes form a U-equivalent 3-sided enclosure.
-    Rotation of each l_shaped: 0.00 and 90.00 (one per corner).
+STEP 2 — PER-BLOCK BUILDING PLACEMENT (rectangular only)
 
-  Option C — three rectangular slabs forming 3 walls:
-    Left slab  : x = block_x - outer_width/2,  y = block_y,           rotation_deg = 90.00
-    Right slab : x = block_x + outer_width/2,  y = block_y,           rotation_deg = 90.00
-    Back slab  : x = block_x,                  y = block_y + outer_length/2, rotation_deg = 0.00
+For each block with center (Bx, By) and block_size S:
 
-  CRITICAL: Inner courtyard must remain COMPLETELY EMPTY — no buildings, no roads.
+Define the outer boundary of the building zone:
+  half = S / 2
+
+Define setback_from_road_edge (read from prompt; or default = road_width/2 + 3.00 m from road centerline):
+  The building's OUTER FACE must be at least setback_from_road_edge m from the nearest road edge.
+  Building outer face = block edge - setback_from_road_edge
+
+NORTH SIDE (buildings along y = By + half − setback − length/2):
+  Buildings have their long axis along X (rotation_deg = 0.00).
+  Distribute n_per_side buildings evenly along the north side:
+    available_x = S − 2 × corner_gap    (corner_gap = 5.00 m minimum to avoid edge collision)
+    spacing = available_x / n_per_side
+    For building i (i = 0..n_per_side-1):
+      x = Bx − available_x/2 + (i + 0.5) × spacing
+      y = By + half − setback − length_i/2
+      (where setback = distance from block edge to building outer face, read from prompt)
+
+SOUTH SIDE (mirror of north):
+      x = Bx − available_x/2 + (i + 0.5) × spacing
+      y = By − half + setback + length_i/2
+
+EAST SIDE (buildings along x = Bx + half − setback − width_i/2, rotation_deg = 90.00):
+  Buildings have their long axis along Y (rotation_deg = 90.00).
+  width and length are defined BEFORE rotation; after 90° rotation, width runs along Y.
+    available_y = S − 2 × corner_gap
+    spacing = available_y / n_per_side
+    For building i:
+      x = Bx + half − setback − width_i/2
+      y = By − available_y/2 + (i + 0.5) × spacing
+
+WEST SIDE (mirror of east):
+      x = Bx − half + setback + width_i/2
+      y = By − available_y/2 + (i + 0.5) × spacing
+
+CORNER GAP RULE:
+  Leave ≥ 5.00 m gap at both ends of each side so corner buildings do not collide.
+  If n_per_side buildings are too wide to fit with 5 m gaps, reduce their widths proportionally.
+
+CRITICAL: Inner courtyard must remain COMPLETELY EMPTY — no buildings, no roads.
 
 STEP 3 — PERIMETER ROADS
-  For a row of N blocks:
-    Longitudinal roads (2 total, parallel to X axis):
-      y_top    =  block_size/2 + road_width/2  → extends from x_min to x_max
-      y_bottom = -block_size/2 - road_width/2  → extends from x_min to x_max
-    Transverse roads (N+1 total, perpendicular to block row):
-      x_k = block_x_k - block_size/2 - road_width/2  for k=0  (left edge of block 0)
-      x_k = block_x_k + block_size/2 + road_width/2  for k=N-1 (right edge of last block)
-      plus midpoint roads between adjacent blocks
-
-  Road length extension: extend each road ±20 m beyond the block cluster edges.
-  All roads are straight. Width: road_width. Material: "marble" (default).
+  For a 2×2 grid, place 4 roads forming a cross/grid:
+    Road along y = +(block_size/2 + road_width/2)   from x_left to x_right
+    Road along y = -(block_size/2 + road_width/2)   from x_left to x_right
+    Road along x = +(block_size/2 + road_width/2)   from y_bottom to y_top
+    Road along x = -(block_size/2 + road_width/2)   from y_bottom to y_top
+  Plus outer perimeter roads along the map edge if requested.
+  Extend roads ±20 m beyond block cluster edges.
+  All roads are straight. Width = road_width. Material = "marble" (default).
 
 STEP 4 — CLEARANCE CHECK
-  Building-to-building edge distance >= 5.00 m
-  Building-to-road edge distance >= 5.00 m (= setback rule above)
+  Building-to-building edge distance >= 5.00 m (including between adjacent sides at corners)
+  Building-to-road edge distance >= 5.00 m
 
 STEP 5 — UNIQUE VALUES
-  Every building has a unique height (differ >= 3 m between all buildings).
-  Every building of same type has unique dimensions (differ >= 2 m per dimension).
-  rotation_deg must be unique across all buildings: use 0.00 for most, 90.00 for rotated ones.
-  If all must be strictly unique, add small offsets: 0.00, 0.01, 0.02 or 90.00, 90.01.
+  Every building must have a UNIQUE height (differ >= 3.00 m between all buildings).
+  Same-side buildings: vary width/length freely within user-specified ranges.
+  rotation_deg: only 0.00 or 90.00. Add tiny offsets (0.01, 0.02…) if strict uniqueness required.
 
+==================================================
+WORKED EXAMPLE: 2×2 grid, 3 buildings per side, block_size=96.06 m
+==================================================
+
+Block centers: (±52.24, ±52.24) with road_width=8.42 m  → center = 96.06/2 + 8.42/2 = 52.24
+
+For block at (−52.24, −52.24):
+  half = 48.03
+  setback from block edge = 4.74 m  → outer face at: 48.03 − 4.74 = 43.29 m from block center
+  corner_gap = 5.00 m, available_x = 96.06 − 10.00 = 86.06 m, spacing = 86.06/3 = 28.69 m
+
+  NORTH side (y = −52.24 + 43.29 − length/2):
+    Building 0: x = −52.24 − 43.03 + 14.345 = −80.93, y = −52.24 + 43.29 − 19.35/2 = −18.63
+    Building 1: x = −52.24 − 43.03 + 43.03  = −52.24, y = similar
+    Building 2: x = −52.24 − 43.03 + 71.72  = −23.55, y = similar
+
+  Apply same logic for south, east (rotation=90), west (rotation=90) sides.
 
 ==================================================
 SCENE BOUNDS AND INITIAL LAYOUT ZONE
@@ -140,27 +185,21 @@ SCENE BOUNDS AND INITIAL LAYOUT ZONE
 
 Total scene size: 200 m × 200 m. Coordinate range: x ∈ [-100, +100], y ∈ [-100, +100].
 
-INITIAL LAYOUT (first generation): place ALL buildings within the central 180 m × 180 m zone,
-i.e. each building's footprint must satisfy x ∈ [-90, +90], y ∈ [-90, +90] including its
-extent (after rotation). Leave a 10 m margin on every side so that, if a later correction pass
-needs to push buildings outward to resolve overlaps, they have room to move within the full
-±100 m bounds without leaving the map.
-
-ADJUSTMENT (when an algorithmic OVERLAP RESOLUTION block is provided in the prompt):
-You may now use the FULL ±100 m bounds. Apply the suggested target positions exactly.
+ALL building footprints (after rotation) must lie within x ∈ [-90, +90], y ∈ [-90, +90].
 
 ==================================================
 GLOBAL RULES
 ==================================================
 
 1. PRECISION: all float fields to exactly 2 decimal places. NEVER plain integers.
-2. COURTYARD: inner courtyard void must be empty — no buildings or roads inside.
-3. ROTATION: 0.00 or 90.00 only (axis-aligned facing inward).
-4. HEIGHT: every building has a unique height.
-5. CLEARANCE: building-to-building >= 5.00 m; building-to-road >= 5.00 m.
-6. TX/RX/RT: omit if not mentioned.
-7. MATERIALS: one of: concrete, marble, metal, wood, glass.
-8. OUTPUT: pure JSON only. No markdown, no prose, no fences.
+2. TYPES: ONLY rectangular and trapezoidal. Never use u_shaped, l_shaped, t_shaped.
+3. COURTYARD: inner courtyard void must be empty — no buildings or roads inside.
+4. ROTATION: 0.00 for N/S-side buildings (long axis along X); 90.00 for E/W-side buildings (long axis along Y).
+5. HEIGHT: every building has a unique height (differ >= 3.00 m).
+6. CLEARANCE: building-to-building >= 5.00 m; building-to-road >= 5.00 m.
+7. TX/RX/RT: omit fields entirely if not mentioned by the user.
+8. MATERIALS: one of: concrete, marble, metal, wood, glass.
+9. OUTPUT: pure JSON only. No markdown, no prose, no fences.
 
 ==================================================
 OUTPUT JSON STRUCTURE
@@ -170,13 +209,13 @@ OUTPUT JSON STRUCTURE
   "intent": "scene_generation",
   "location": { ... only if mentioned ... },
   "scene": {
-    "buildings": [ ...perimeter building objects... ],
+    "buildings": [ ...all perimeter rectangular buildings... ],
     "roads":     [ ...perimeter road network... ]
   },
   "tx":  { ... only if mentioned ... },
   "rx":  { ... only if mentioned ... },
   "rt":  { ... only if mentioned ... },
-  "explanation": "Generated perimeter/courtyard scene with N blocks."
+  "explanation": "Generated perimeter/courtyard scene: N blocks × 4 sides × M buildings = total K buildings."
 }
 
 Begin. Wait for the user's prompt and respond with JSON only.
