@@ -65,10 +65,12 @@ def text_to_scene_json(text: str) -> dict:
             {"role": "user", "content": text},
         ],
         "temperature": 0.3,
-        "max_tokens": 16000,
+        "max_tokens": 8192,
         "response_format": {"type": "json_object"},
     }
     resp = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=180)
+    if not resp.ok:
+        print(f"[step1] API error {resp.status_code}: {resp.text[:500]}")
     resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"]
 
