@@ -6,20 +6,21 @@ step5_scene_maps.py — 根据场景描述生成三通道场景地图
     python step5_scene_maps.py simple_scene/scene_001/scene_description.json
 
 输出目录: scene_maps/{name}/
-    {name}_maps.npy        三通道地图，shape (128, 128, 3)，float32
+    {name}_maps.npy        三通道地图，shape (40, 40, 3)，float32
     {name}_height.png      通道0：建筑物高度图（归一化，灰度）
-    {name}_material.png    通道1：材质图（0–5 整数编码）
+    {name}_material.png    通道1：材质图（0–11 整数编码）
     {name}_los.png         通道2：LOS 图（1=直视，0=遮挡）
 
 通道说明:
     通道0 — 高度图：每格最高建筑物的高度，归一化到 [0, 1]
-    通道1 — 材质图：0=地面, 1=concrete, 2=marble, 3=metal, 4=wood, 5=glass（归一化到 [0, 1]）
+    通道1 — 材质图：0=地面, 1=concrete, ..., 11=floorboard（归一化到 [0, 1]）
     通道2 — LOS图：从发射机(TX)到该格点的直视路径，1.0=直视，0.0=遮挡
 
 地图参数:
-    分辨率：128 × 128
+    分辨率：40 × 40
+    格点尺寸：5.0 m × 5.0 m（与 path_gain cell_size 一致）
     地图范围：200 m × 200 m，坐标 x,y ∈ [-100, +100] m
-    格点中心：-100 + (i + 0.5) × (200/128) m
+    格点中心：-100 + (i + 0.5) × 5.0 m
 """
 
 import json
@@ -41,12 +42,12 @@ from overlap_checker import building_to_polygon
 # 常量
 # ---------------------------------------------------------------------------
 
-RESOLUTION = 128
+RESOLUTION = 40
 MAP_SIZE_M = 200.0
-HALF = MAP_SIZE_M / 2.0          # 100.0 m
-CELL_SIZE = MAP_SIZE_M / RESOLUTION  # ≈ 1.5625 m
+HALF = MAP_SIZE_M / 2.0      # 100.0 m
+CELL_SIZE = MAP_SIZE_M / RESOLUTION  # 5.0 m — 与 path_gain cell_size 保持一致
 
-# 格点中心坐标（1D，共 128 个）
+# 格点中心坐标（1D，共 40 个）
 _COORDS = np.linspace(
     -HALF + CELL_SIZE / 2,
     HALF - CELL_SIZE / 2,
@@ -270,7 +271,7 @@ def _save_los_png(los_map: np.ndarray, path: str) -> None:
 def generate_scene_maps(
     scene_desc_path: str,
     output_dir: str,
-    resolution: int = 128,
+    resolution: int = 40,
 ) -> str:
     """
     根据 scene_description.json 生成三通道场景地图。
@@ -278,7 +279,7 @@ def generate_scene_maps(
     Args:
         scene_desc_path: simple_scene/{name}/scene_description.json 的路径
         output_dir:      输出目录（如 scene_maps/{name}/）
-        resolution:      暂仅支持默认值 128
+        resolution:      暂仅支持默认值 40（cell_size=5m）
 
     Returns:
         npy_path: 保存的 .npy 文件路径
