@@ -94,6 +94,10 @@ def main():
             b["height"] = new_h
             if abs(new_h - old_h) > 0.01:
                 print(f"  building_{idx}: height {old_h:.2f} → {new_h:.2f} m")
+        if "width_m" in pos:
+            b["width"] = round(float(pos["width_m"]), 2)
+        if "length_m" in pos:
+            b["length"] = round(float(pos["length_m"]), 2)
         dx, dy = new_x - old_x, new_y - old_y
         if abs(dx) > 0.01 or abs(dy) > 0.01:
             print(f"  building_{idx}: ({old_x:.2f}, {old_y:.2f}) → "

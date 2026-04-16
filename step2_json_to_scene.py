@@ -38,10 +38,10 @@ def create_ground_mesh(scene_dir: str, size: float = 300.0) -> str:
     os.makedirs(mesh_dir, exist_ok=True)
     half = size / 2
     corners = np.array([
-        [-half, -half, 0],
-        [half, -half, 0],
-        [half, half, 0],
-        [-half, half, 0],
+        [-half, -half, -0.01],
+        [ half, -half, -0.01],
+        [ half,  half, -0.01],
+        [-half,  half, -0.01],
     ])
     points = pv.PolyData(corners)
     ground_mesh = points.delaunay_2d()

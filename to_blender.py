@@ -160,16 +160,9 @@ for _i, _b in enumerate(_buildings):
     _obj.location       = (_x, _y, _h / 2)
     _obj.rotation_euler = (0.0, 0.0, math.radians(_rot))
     _obj.name           = f"building_{{_i}}"
-
-    # ── 高度标注（仅供参考；修改高度请调整建筑的 Dimensions Z）──────────────
-    bpy.ops.object.text_add(location=(0, 0, 0))
-    _txt              = bpy.context.active_object
-    _txt.name         = f"label_{{_i}}"
-    _txt.data.body    = f"#{{_i}}  H={{_h:.1f}}m"
-    _txt.data.size    = max(2.0, _h * 0.15)
-    _txt.data.align_x = "CENTER"
-    _txt.location     = (_x, _y, _h + 1.5)
-    _txt.rotation_euler = (0.0, 0.0, 0.0)   # 朝上，俯视可读
+    _obj["ckm_width"]  = float(_b.get("width",  _b.get("bottom_width", 10)))
+    _obj["ckm_length"] = float(_b.get("length", 10))
+    _obj["ckm_height"] = _h
 
 # ── 道路（仅可视化参考，不导出坐标）────────────────────────────────────────
 for _i, _r in enumerate(_roads):
@@ -198,6 +191,45 @@ for _area in bpy.context.screen.areas:
         _r3d.view_rotation = mathutils.Quaternion((1, 0, 0, 0))
         _r3d.view_distance = 250
         break
+
+# ── 双击编辑建筑尺寸算子 ────────────────────────────────────────────────────
+class OBJECT_OT_ckm_edit_dims(bpy.types.Operator):
+    bl_idname = "object.ckm_edit_dims"
+    bl_label  = "编辑建筑尺寸"
+    width:  bpy.props.FloatProperty(name="宽度 (m)", min=0.5, max=500.0)
+    length: bpy.props.FloatProperty(name="长度 (m)", min=0.5, max=500.0)
+    height: bpy.props.FloatProperty(name="高度 (m)", min=0.5, max=500.0)
+
+    def invoke(self, context, event):
+        obj = context.active_object
+        if obj is None or not obj.name.startswith("building_"):
+            return {{'CANCELLED'}}
+        self.width  = float(obj.get("ckm_width",  obj.dimensions.x))
+        self.length = float(obj.get("ckm_length", obj.dimensions.y))
+        self.height = float(obj.get("ckm_height", obj.dimensions.z))
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None:
+            return {{'CANCELLED'}}
+        rot = obj.rotation_euler.copy()
+        obj.rotation_euler = (0, 0, 0)
+        obj.dimensions = (self.width, self.length, self.height)
+        obj.rotation_euler = rot
+        obj.location.z = self.height / 2
+        obj["ckm_width"]  = self.width
+        obj["ckm_length"] = self.length
+        obj["ckm_height"] = self.height
+        return {{'FINISHED'}}
+
+if hasattr(bpy.types, "OBJECT_OT_ckm_edit_dims"):
+    bpy.utils.unregister_class(bpy.types.OBJECT_OT_ckm_edit_dims)
+bpy.utils.register_class(OBJECT_OT_ckm_edit_dims)
+_kc = bpy.context.window_manager.keyconfigs.addon
+if _kc:
+    _km  = _kc.keymaps.new(name="Object Mode", space_type="EMPTY")
+    _kmi = _km.keymap_items.new("object.ckm_edit_dims", "LEFTMOUSE", "DOUBLE_CLICK")
 
 print(f"[setup] 场景 '{name}' 已加载：{{len(_buildings)}} 栋建筑，{{len(_roads)}} 条道路。")
 print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{name}/{name}_extract.py")
@@ -251,11 +283,15 @@ for _obj in bpy.data.objects:
     _t   = _obj.matrix_world.translation
     _r   = _obj.matrix_world.to_euler()[2]         # Z 轴旋转（弧度）
     _h_m = round(float(_obj.dimensions.z), 2)      # 当前高度（含用户修改）
+    _w_m = round(float(_obj["ckm_width"])  if "ckm_width"  in _obj else _obj.dimensions.x, 2)
+    _l_m = round(float(_obj["ckm_length"]) if "ckm_length" in _obj else _obj.dimensions.y, 2)
     _out[str(_idx)] = {{
         "x":            round(float(_t.x), 2),
         "y":            round(float(_t.y), 2),
         "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
         "height_m":     _h_m,
+        "width_m":      _w_m,
+        "length_m":     _l_m,
     }}
 
 _path = _get_script_dir() / "{name}_positions.json"
