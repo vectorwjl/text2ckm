@@ -183,7 +183,7 @@ def main():
         npz_path   = str(Path("path_gain/path_gain_raw_data") / f"{name}.npz")
         Path(photo_path).parent.mkdir(parents=True, exist_ok=True)
         Path(npz_path).parent.mkdir(parents=True, exist_ok=True)
-        generate_path_gain(
+        los_map = generate_path_gain(
             xml_path=xml_path,
             photo_path=photo_path,
             npz_path=npz_path,
@@ -194,7 +194,7 @@ def main():
         print(f"[blender_to_json] Path gain 已保存：{photo_path}")
 
         maps_dir = str(Path("scene_maps") / name)
-        generate_scene_maps(str(scene_desc_path), maps_dir)
+        generate_scene_maps(str(scene_desc_path), maps_dir, los_map=los_map)
         print(f"[blender_to_json] 场景地图已保存：{maps_dir}")
     except Exception as e:
         print(f"[blender_to_json] 场景生成失败（可手动运行 main.py）：{e}")

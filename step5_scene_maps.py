@@ -272,6 +272,7 @@ def generate_scene_maps(
     scene_desc_path: str,
     output_dir: str,
     resolution: int = 40,
+    los_map: "np.ndarray | None" = None,
 ) -> str:
     """
     根据 scene_description.json 生成三通道场景地图。
@@ -280,6 +281,8 @@ def generate_scene_maps(
         scene_desc_path: simple_scene/{name}/scene_description.json 的路径
         output_dir:      输出目录（如 scene_maps/{name}/）
         resolution:      暂仅支持默认值 40（cell_size=5m）
+        los_map:         可选，shape (40, 40) float32，由 step4 Sionna RT 计算。
+                         若提供则直接使用，否则退回 Bresenham 几何近似。
 
     Returns:
         npy_path: 保存的 .npy 文件路径
@@ -321,8 +324,18 @@ def generate_scene_maps(
     material_int = np.round(material_map * MATERIAL_MAX).astype(np.int32)
 
     # ── 通道 2：LOS 图 ────────────────────────────────────────────────────────
-    print(f"[step5] 计算 LOS 图（128×128 射线投影）…")
-    los_map = _compute_los(height_raw, tx_x, tx_y, tx_z, rx_height)
+    if los_map is not None:
+        # 使用 step4 Sionna RT 精确计算的 LOS 图
+        if los_map.shape != (RESOLUTION, RESOLUTION):
+            print(f"[step5] WARNING: 传入 los_map shape={los_map.shape} "
+                  f"与期望 ({RESOLUTION},{RESOLUTION}) 不符，忽略并回退 Bresenham。")
+            los_map = _compute_los(height_raw, tx_x, tx_y, tx_z, rx_height)
+        else:
+            los_map = los_map.astype(np.float32)
+            print(f"[step5] 使用 Sionna RT LOS 图（来自 step4）。")
+    else:
+        print(f"[step5] 计算 LOS 图（Bresenham 几何近似）…")
+        los_map = _compute_los(height_raw, tx_x, tx_y, tx_z, rx_height)
     los_ratio = los_map.mean() * 100
     print(f"[step5] LOS 覆盖率：{los_ratio:.1f}%")
 

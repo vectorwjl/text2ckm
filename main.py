@@ -152,11 +152,12 @@ def main():
         except Exception as e:
             print(f"[main] WARNING: Top-down render failed: {e}")
 
-        # Step 4: path_gain
+        # Step 4: path_gain + LOS 图（Sionna RT max_depth=0）
         photo_path = str(Path("path_gain/path_gain_photo") / f"{name}.png")
         npz_path = str(Path("path_gain/path_gain_raw_data") / f"{name}.npz")
+        los_map = None
         try:
-            generate_path_gain(
+            los_map = generate_path_gain(
                 xml_path=xml_path,
                 photo_path=photo_path,
                 npz_path=npz_path,
@@ -171,7 +172,7 @@ def main():
         # Step 5: 多通道场景地图（高度图/材质图/LOS图）
         maps_dir = str(Path("scene_maps") / name)
         try:
-            generate_scene_maps(str(scene_desc_path), maps_dir)
+            generate_scene_maps(str(scene_desc_path), maps_dir, los_map=los_map)
         except Exception as e:
             print(f"[main] WARNING: Scene maps generation failed: {e}")
 
