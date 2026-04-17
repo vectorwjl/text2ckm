@@ -53,7 +53,7 @@ def generate_path_gain(
     map_size = float(rt_params.get("map_size_m", 200.0))
     max_depth = int(rt_params.get("max_depth", 5))
     samples_per_tx = int(rt_params.get("samples_per_tx", 10_000_000))
-    cell_size = float(rt_params.get("cell_size_m", 5.0))
+    cell_size = float(rt_params.get("cell_size_m", 1.0))
 
     os.makedirs(os.path.dirname(photo_path) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(npz_path) or ".", exist_ok=True)

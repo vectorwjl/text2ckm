@@ -48,7 +48,7 @@ from overlap_checker import building_to_polygon
 # 地图几何常量
 # ---------------------------------------------------------------------------
 
-RESOLUTION = 40
+RESOLUTION = 200
 MAP_SIZE_M = 200.0
 HALF       = MAP_SIZE_M / 2.0          # 100.0 m
 CELL_SIZE  = MAP_SIZE_M / RESOLUTION   # 5.0 m
