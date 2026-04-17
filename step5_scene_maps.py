@@ -225,14 +225,18 @@ def _compute_height_material(
     return height_raw, eps_r_map, sigma_map
 
 
-def _compute_distance(tx_x: float, tx_y: float) -> np.ndarray:
+def _compute_distance(
+    tx_x: float, tx_y: float, tx_z: float, rx_height: float
+) -> np.ndarray:
     """
-    计算每个栅格点中心到 TX 的欧几里得距离，归一化到 [0, 1]。
+    计算每个栅格点中心（高度=rx_height）到 TX（高度=tx_z）的三维欧几里得距离，
+    归一化到 [0, 1]。
 
     归一化基准：网格内距 TX 最远的栅格点距离（场景内最大值）。
     """
     XX, YY = np.meshgrid(_COORDS, _COORDS)          # (40, 40)
-    dist = np.sqrt((XX - tx_x) ** 2 + (YY - tx_y) ** 2).astype(np.float32)
+    dz = rx_height - tx_z
+    dist = np.sqrt((XX - tx_x) ** 2 + (YY - tx_y) ** 2 + dz ** 2).astype(np.float32)
     max_dist = float(dist.max())
     return (dist / max_dist).astype(np.float32) if max_dist > 0 else dist
 
@@ -360,7 +364,7 @@ def generate_scene_maps(
     print(f"[step5] 建筑物最大高度：{max_h:.1f} m")
 
     # ── 通道 3：距离图 ────────────────────────────────────────────────────────
-    dist_map = _compute_distance(tx_x, tx_y)
+    dist_map = _compute_distance(tx_x, tx_y, tx_z, rx_height)
     print(f"[step5] 距离图完成（TX=({tx_x:.1f},{tx_y:.1f})m，最大距离={dist_map.max() * dist_map.max():.0f}m²）")
 
     # ── 拼合四通道 (40, 40, 4) ────────────────────────────────────────────────
