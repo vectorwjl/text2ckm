@@ -65,10 +65,37 @@ def text_to_scene_json(text: str) -> dict:
             {"role": "user", "content": text},
         ],
         "temperature": 0.3,
-        "max_tokens": 3000,
+        "max_tokens": 8192,
         "response_format": {"type": "json_object"},
     }
-    resp = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=120)
+    resp = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=180)
+    if not resp.ok:
+        print(f"[step1] API error {resp.status_code}: {resp.text[:500]}")
     resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"]
-    return json.loads(content)
+
+    # 清理：去除可能的 markdown 代码块包裹
+    content = content.strip()
+    if content.startswith("```"):
+        lines = content.splitlines()
+        content = "\n".join(
+            line for line in lines
+            if not line.strip().startswith("```")
+        ).strip()
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        # 截断修复：找到最后一个完整的 } 尝试补全
+        print(f"[step1] WARNING: JSON parse error ({e}), attempting repair…")
+        # 找到最后一个完整闭合位置
+        for end in range(len(content), 0, -1):
+            try:
+                return json.loads(content[:end])
+            except json.JSONDecodeError:
+                continue
+        raise RuntimeError(
+            f"DeepSeek 返回的内容无法解析为 JSON（token 可能仍然不足）。\n"
+            f"原始错误：{e}\n"
+            f"内容末尾 200 字符：…{content[-200:]}"
+        )

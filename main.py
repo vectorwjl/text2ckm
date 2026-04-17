@@ -75,6 +75,21 @@ def main():
                 print(f"  {ov['a_desc']}  ×  {ov['b_desc']}  "
                       f"({ov['overlap_area_m2']:.2f} m²，重心 {ov['overlap_centroid']})")
 
+            # 写入 scene_description.json（blender_to_json.py 需要此文件）
+            _scene_dir = Path("simple_scene") / name
+            _scene_dir.mkdir(parents=True, exist_ok=True)
+            _scene_desc_path = _scene_dir / "scene_description.json"
+            _scene_desc_path.write_text(
+                json.dumps(
+                    {"location_name": name, "scene": scene_data,
+                     "tx": result.get("tx", {}), "rx": result.get("rx", {}),
+                     "rt": result.get("rt", {})},
+                    ensure_ascii=False, indent=2,
+                ),
+                encoding="utf-8",
+            )
+            print(f"[main] Scene description saved: {_scene_desc_path}")
+
             # 自动生成 Blender 脚本文件（存入 blender_scenes/{name}/ 子目录）
             _blender_scene_dir = _to_blender.BLENDER_SCENES_DIR / name
             _blender_scene_dir.mkdir(parents=True, exist_ok=True)
@@ -137,11 +152,12 @@ def main():
         except Exception as e:
             print(f"[main] WARNING: Top-down render failed: {e}")
 
-        # Step 4: path_gain
+        # Step 4: path_gain + LOS 图（Sionna RT max_depth=0）
         photo_path = str(Path("path_gain/path_gain_photo") / f"{name}.png")
         npz_path = str(Path("path_gain/path_gain_raw_data") / f"{name}.npz")
+        los_map = None
         try:
-            generate_path_gain(
+            los_map = generate_path_gain(
                 xml_path=xml_path,
                 photo_path=photo_path,
                 npz_path=npz_path,

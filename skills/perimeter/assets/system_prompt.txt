@@ -70,13 +70,27 @@ Road thickness = 0.25 m (hardcoded — never include in JSON).
 MATERIALS
 ==================================================
 
-  concrete  (混凝土)   — default for buildings
-  marble    (大理石)   — default for roads
-  metal     (金属)
-  wood      (木材)
-  glass     (玻璃幕墙)
+  Buildings (default: "concrete"):
+    concrete      (混凝土)    — grey matte; default for buildings
+    brick         (砖)        — common masonry
+    plasterboard  (石膏板)    — lightweight wall board
+    wood          (木材)      — warm brown, low reflectance
+    glass         (玻璃幕墙)  — transparent curtain wall, high specular
+    metal         (金属)      — highly reflective metallic surface
+    ceiling_board (天花板)    — lightweight ceiling panel
+    chipboard     (刨花板)    — composite wood-based panel
+    plywood       (胶合板)    — layered wood panel
+    floorboard    (地板)      — hardwood flooring surface
 
-When frequency_ghz > 10, default building materials to "concrete" unless user specifies otherwise.
+  Roads (default: "marble"):
+    marble        (大理石)    — polished light grey; default for roads
+    concrete      (混凝土)    — rough grey pavement
+    brick         (砖)        — textured brick pavement
+    wood          (木材)      — wooden walkway/decking
+    metal         (金属)      — metallic grating/surface
+    plywood       (胶合板)    — wooden board surface
+
+When frequency_ghz > 10, default all building materials to "concrete" for simulation accuracy.
 
 ==================================================
 LAYOUT RULE: PERIMETER / COURTYARD (周边式)
@@ -198,7 +212,7 @@ GLOBAL RULES
 5. HEIGHT: every building has a unique height (differ >= 3.00 m).
 6. CLEARANCE: building-to-building >= 5.00 m; building-to-road >= 5.00 m.
 7. TX/RX/RT: omit fields entirely if not mentioned by the user.
-8. MATERIALS: one of: concrete, marble, metal, wood, glass.
+8. MATERIALS: buildings — concrete/brick/plasterboard/wood/glass/metal/ceiling_board/chipboard/plywood/floorboard; roads — marble/concrete/brick/wood/metal/plywood.
 9. OUTPUT: pure JSON only. No markdown, no prose, no fences.
 
 ==================================================

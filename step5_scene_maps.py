@@ -1,25 +1,32 @@
 """
-step5_scene_maps.py — 根据场景描述生成三通道场景地图
+step5_scene_maps.py — 根据场景描述生成四通道场景地图
 
 用法:
     python step5_scene_maps.py <scene_name>
     python step5_scene_maps.py simple_scene/scene_001/scene_description.json
 
 输出目录: scene_maps/{name}/
-    {name}_maps.npy        三通道地图，shape (128, 128, 3)，float32
-    {name}_height.png      通道0：建筑物高度图（归一化，灰度）
-    {name}_material.png    通道1：材质图（0–5 整数编码）
-    {name}_los.png         通道2：LOS 图（1=直视，0=遮挡）
+    {name}_maps.npy              四通道地图，shape (40, 40, 4)，float32
+    {name}_material_props.json   材质电磁属性及归一化参数（供后续反归一化使用）
+    {name}_height.png            通道0：建筑物高度图（归一化，灰度）
+    {name}_material_eps.png      通道1：归一化相对介电常数图
+    {name}_material_sigma.png    通道2：归一化电导率图
+    {name}_distance.png          通道3：距离地图（每栅格中心到 TX 的欧几里得距离，归一化）
 
 通道说明:
     通道0 — 高度图：每格最高建筑物的高度，归一化到 [0, 1]
-    通道1 — 材质图：0=地面, 1=concrete, 2=marble, 3=metal, 4=wood, 5=glass（归一化到 [0, 1]）
-    通道2 — LOS图：从发射机(TX)到该格点的直视路径，1.0=直视，0.0=遮挡
+    通道1 — 归一化相对介电常数（ε_r_norm）：
+            按 ITU-R P.2040 公式 ε_r = a·f^b 在场景频率下计算，min-max 归一化
+    通道2 — 归一化电导率（σ_norm）：
+            按 ITU-R P.2040 公式 σ = c·f^d 在场景频率下计算，对数归一化
+    通道3 — 距离图：每栅格点中心到 TX 的欧几里得距离，归一化到 [0, 1]
+
+    背景（无建筑格点）使用地面材质 wet_ground 的归一化属性。
 
 地图参数:
-    分辨率：128 × 128
+    分辨率：40 × 40
+    格点尺寸：5.0 m × 5.0 m（与 path_gain cell_size 一致）
     地图范围：200 m × 200 m，坐标 x,y ∈ [-100, +100] m
-    格点中心：-100 + (i + 0.5) × (200/128) m
 """
 
 import json
@@ -38,167 +45,200 @@ from shapely.geometry import Point
 from overlap_checker import building_to_polygon
 
 # ---------------------------------------------------------------------------
-# 常量
+# 地图几何常量
 # ---------------------------------------------------------------------------
 
-RESOLUTION = 128
+RESOLUTION = 200
 MAP_SIZE_M = 200.0
-HALF = MAP_SIZE_M / 2.0          # 100.0 m
-CELL_SIZE = MAP_SIZE_M / RESOLUTION  # ≈ 1.5625 m
+HALF       = MAP_SIZE_M / 2.0          # 100.0 m
+CELL_SIZE  = MAP_SIZE_M / RESOLUTION   # 5.0 m
 
-# 格点中心坐标（1D，共 128 个）
 _COORDS = np.linspace(
     -HALF + CELL_SIZE / 2,
-    HALF - CELL_SIZE / 2,
+    HALF  - CELL_SIZE / 2,
     RESOLUTION,
     dtype=np.float32,
 )
 
-# 材质名称 → 整数编码（0 保留给无建筑的地面）
-MATERIAL_ENCODING = {
-    "ground":   0,
-    "concrete": 1,
-    "marble":   2,
-    "metal":    3,
-    "wood":     4,
-    "glass":    5,
-}
-MATERIAL_MAX = 5  # 用于归一化
+# ---------------------------------------------------------------------------
+# ITU-R P.2040 材质参数: {材质名: (a, b, c, d)}
+#   ε_r = a × f_GHz^b
+#   σ   = c × f_GHz^d
+# 对有多频率行（glass / ceiling_board）的材质使用 1–100 GHz 行
+# ---------------------------------------------------------------------------
 
-# 可视化色板
-_HEIGHT_CMAP = "gray"
-_MATERIAL_COLORS = ["#888888",  # 0: ground — 灰色
-                    "#B0B0B0",  # 1: concrete — 浅灰
-                    "#C8A96E",  # 2: marble — 米黄
-                    "#5A8FC3",  # 3: metal — 钢蓝
-                    "#8B5E3C",  # 4: wood — 木棕
-                    "#7EC8D6"]  # 5: glass — 冰蓝
-_MATERIAL_CMAP = mcolors.ListedColormap(_MATERIAL_COLORS)
-_LOS_CMAP = mcolors.ListedColormap(["#D63031", "#00B894"])  # 红=遮挡, 绿=直视
+MATERIAL_ITU: dict = {
+    "vacuum":            (1.0,    0.0,   0.0,      0.0   ),
+    "concrete":          (5.24,   0.0,   0.0462,   0.7822),
+    "brick":             (3.91,   0.0,   0.0238,   0.16  ),
+    "plasterboard":      (2.73,   0.0,   0.0085,   0.9395),
+    "wood":              (1.99,   0.0,   0.0047,   1.0718),
+    "glass":             (6.31,   0.0,   0.0036,   1.3394),
+    "ceiling_board":     (1.48,   0.0,   0.0011,   1.0750),
+    "chipboard":         (2.58,   0.0,   0.0217,   0.7800),
+    "plywood":           (2.71,   0.0,   0.33,     0.0   ),
+    "marble":            (7.074,  0.0,   0.0055,   0.9262),
+    "floorboard":        (3.66,   0.0,   0.0044,   1.3515),
+    "metal":             (1.0,    0.0,   1e7,      0.0   ),
+    "very_dry_ground":   (3.0,    0.0,   0.00015,  2.52  ),
+    "medium_dry_ground": (15.0,  -0.1,   0.035,    1.63  ),
+    "wet_ground":        (30.0,  -0.4,   0.15,     1.30  ),
+}
+
+_DEFAULT_GROUND = "wet_ground"   # 背景（无建筑格点）默认使用的地面材质
+
+
+# ---------------------------------------------------------------------------
+# 材质电磁属性计算与归一化
+# ---------------------------------------------------------------------------
+
+def compute_material_props(freq_ghz: float) -> dict:
+    """
+    按 ITU-R P.2040 公式计算每种材质在给定频率下的原始 (ε_r, σ)。
+
+    Returns:
+        {材质名: {"eps_r": float, "sigma": float}}
+    """
+    result = {}
+    for mat, (a, b, c, d) in MATERIAL_ITU.items():
+        eps_r = a * (freq_ghz ** b)
+        sigma = c * (freq_ghz ** d) if c > 0 else 0.0
+        result[mat] = {"eps_r": float(eps_r), "sigma": float(sigma)}
+    return result
+
+
+def compute_normalized_props(freq_ghz: float) -> tuple:
+    """
+    计算并归一化所有材质在给定频率下的电磁属性。
+
+    ε_r  — min-max 归一化：eps_r_norm = (ε_r - ε_min) / (ε_max - ε_min)
+    σ    — 对数归一化：sigma_norm = log(σ + 1) / log(σ_max + 1)
+             （解决 metal σ=10^7 与其他材质量级差距悬殊的问题，σ=0 自然映射到 0）
+
+    Returns:
+        normalized:  {材质名 → {"eps_r", "sigma", "eps_r_norm", "sigma_norm"}}
+        norm_params: 归一化参数（含 eps_min/max、sigma_max、log_sigma_max）
+    """
+    props = compute_material_props(freq_ghz)
+
+    eps_vals   = [v["eps_r"] for v in props.values()]
+    sigma_vals = [v["sigma"] for v in props.values()]
+
+    eps_min, eps_max = min(eps_vals), max(eps_vals)
+    sigma_max        = max(sigma_vals)                    # 对数归一化只需要最大值
+    log_sigma_max    = math.log(sigma_max + 1) if sigma_max > 0 else 1.0
+
+    normalized = {}
+    for mat, p in props.items():
+        eps_norm = (
+            (p["eps_r"] - eps_min) / (eps_max - eps_min)
+            if eps_max > eps_min else 0.0
+        )
+        sigma_norm = math.log(p["sigma"] + 1) / log_sigma_max
+        normalized[mat] = {
+            "eps_r":      p["eps_r"],
+            "sigma":      p["sigma"],
+            "eps_r_norm": float(eps_norm),
+            "sigma_norm": float(sigma_norm),
+        }
+
+    norm_params = {
+        "freq_ghz":     freq_ghz,
+        "eps_min":      eps_min,      "eps_max":      eps_max,
+        "sigma_max":    sigma_max,    "log_sigma_max": log_sigma_max,
+        "sigma_method": "log(sigma+1)/log(sigma_max+1)",
+    }
+    return normalized, norm_params
 
 
 # ---------------------------------------------------------------------------
 # 辅助函数
 # ---------------------------------------------------------------------------
 
-def _encode_material(mat_str: str) -> int:
-    """将建筑物材质字符串映射为整数编码。"""
-    key = mat_str.lower().strip() if mat_str else "concrete"
-    return MATERIAL_ENCODING.get(key, 1)  # 未知材质默认 concrete=1
-
-
-def _world_to_grid(wx: float, wy: float) -> tuple[int, int]:
-    """将世界坐标 (wx, wy) 转换为格点索引 (col, row)，不超出 [0, RESOLUTION-1]。"""
+def _world_to_grid(wx: float, wy: float) -> tuple:
     col = int((wx + HALF) / CELL_SIZE)
     row = int((wy + HALF) / CELL_SIZE)
-    col = max(0, min(RESOLUTION - 1, col))
-    row = max(0, min(RESOLUTION - 1, row))
-    return col, row
+    return max(0, min(RESOLUTION - 1, col)), max(0, min(RESOLUTION - 1, row))
 
 
-def _bresenham_path(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
-    """
-    返回从 (x0, y0) 到 (x1, y1) 之间的所有中间格点（不含终点 (x1,y1)）。
-    使用 Bresenham 直线算法。
-    """
+def _bresenham_path(x0: int, y0: int, x1: int, y1: int) -> list:
     pts = []
-    dx = abs(x1 - x0)
-    dy = abs(y1 - y0)
-    sx = 1 if x1 > x0 else -1
-    sy = 1 if y1 > y0 else -1
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx, sy = (1 if x1 > x0 else -1), (1 if y1 > y0 else -1)
     err = dx - dy
     x, y = x0, y0
     while (x, y) != (x1, y1):
         pts.append((x, y))
         e2 = 2 * err
-        if e2 > -dy:
-            err -= dy
-            x += sx
-        if e2 < dx:
-            err += dx
-            y += sy
-    return pts  # 不含终点
+        if e2 > -dy: err -= dy; x += sx
+        if e2 <  dx: err += dx; y += sy
+    return pts
 
 
 # ---------------------------------------------------------------------------
 # 核心计算
 # ---------------------------------------------------------------------------
 
-def _compute_height_material(buildings: list) -> tuple[np.ndarray, np.ndarray]:
+def _compute_height_material(
+    buildings: list,
+    mat_norm: dict,
+    ground_mat: str = _DEFAULT_GROUND,
+) -> tuple:
     """
-    遍历所有建筑物，将其 footprint 光栅化到 128×128 网格。
+    光栅化建筑物，返回高度图与两张材质图（ε_r_norm、σ_norm）。
+
+    背景格点（无建筑覆盖）填充地面材质的归一化属性。
 
     Returns:
-        height_raw   (128, 128) float32  — 原始高度（米），地面=0
-        material_map (128, 128) float32  — 材质整数编码 / MATERIAL_MAX
+        height_raw (40,40) float32  — 原始高度（米），地面=0
+        eps_r_map  (40,40) float32  — 归一化 ε_r
+        sigma_map  (40,40) float32  — 归一化 σ
     """
-    height_raw = np.zeros((RESOLUTION, RESOLUTION), dtype=np.float32)
-    material_raw = np.zeros((RESOLUTION, RESOLUTION), dtype=np.int32)
+    g_key = ground_mat if ground_mat in mat_norm else _DEFAULT_GROUND
+    g_eps = float(mat_norm[g_key]["eps_r_norm"])
+    g_sig = float(mat_norm[g_key]["sigma_norm"])
 
-    # 预构建 footprint
+    height_raw = np.zeros((RESOLUTION, RESOLUTION), dtype=np.float32)
+    eps_r_map  = np.full((RESOLUTION, RESOLUTION), g_eps, dtype=np.float32)
+    sigma_map  = np.full((RESOLUTION, RESOLUTION), g_sig, dtype=np.float32)
+
     footprints = []
     for b in buildings:
         try:
-            fp = building_to_polygon(b)
-            bh = float(b.get("height", 0))
-            mat = _encode_material(b.get("material", "concrete"))
-            footprints.append((fp, bh, mat))
+            fp    = building_to_polygon(b)
+            bh    = float(b.get("height", 0))
+            mkey  = (b.get("material") or "concrete").lower().strip()
+            m     = mat_norm.get(mkey, mat_norm["concrete"])
+            footprints.append((fp, bh, float(m["eps_r_norm"]), float(m["sigma_norm"])))
         except Exception as e:
             print(f"[step5] WARNING: 跳过建筑物（无法生成 footprint）：{e}")
 
-    if not footprints:
-        return height_raw, material_raw.astype(np.float32) / MATERIAL_MAX
-
-    for j, ry in enumerate(_COORDS):         # row ↔ y
-        for i, rx in enumerate(_COORDS):     # col ↔ x
+    for j, ry in enumerate(_COORDS):
+        for i, rx in enumerate(_COORDS):
             p = Point(float(rx), float(ry))
-            for fp, bh, mat in footprints:
+            for fp, bh, eps_n, sig_n in footprints:
                 if bh > height_raw[j, i] and fp.contains(p):
                     height_raw[j, i] = bh
-                    material_raw[j, i] = mat
+                    eps_r_map[j, i]  = eps_n
+                    sigma_map[j, i]  = sig_n
 
-    material_map = material_raw.astype(np.float32) / MATERIAL_MAX
-    return height_raw, material_map
+    return height_raw, eps_r_map, sigma_map
 
 
-def _compute_los(
-    height_raw: np.ndarray,
-    tx_x: float, tx_y: float, tx_z: float,
-    rx_height: float,
+def _compute_distance(
+    tx_x: float, tx_y: float, tx_z: float, rx_height: float
 ) -> np.ndarray:
     """
-    通过高度场射线投影计算 LOS 图。
+    计算每个栅格点中心（高度=rx_height）到 TX（高度=tx_z）的三维欧几里得距离，
+    归一化到 [0, 1]。
 
-    对每个格点 (col, row)，用 Bresenham 算法沿射线从 TX 格点遍历到该格点，
-    在每个中间格点处检查射线高度是否被建筑遮挡。
-
-    Returns:
-        los_map (128, 128) float32  — 1.0=直视，0.0=遮挡
+    归一化基准：网格内距 TX 最远的栅格点距离（场景内最大值）。
     """
-    los_map = np.ones((RESOLUTION, RESOLUTION), dtype=np.float32)
-
-    # TX 格点索引
-    tx_col, tx_row = _world_to_grid(tx_x, tx_y)
-
-    for row in range(RESOLUTION):
-        for col in range(RESOLUTION):
-            path = _bresenham_path(tx_col, tx_row, col, row)
-            if not path:
-                continue  # TX 与 RX 在同一格点，直视
-
-            total_dist = math.sqrt((col - tx_col) ** 2 + (row - tx_row) ** 2)
-
-            for (mc, mr) in path:
-                d = math.sqrt((mc - tx_col) ** 2 + (mr - tx_row) ** 2)
-                t = d / total_dist if total_dist > 0 else 0.0
-                # 射线在中间格点处的高度
-                ray_h = tx_z + t * (rx_height - tx_z)
-                bld_h = height_raw[mr, mc]
-                if bld_h > 0 and ray_h <= bld_h:
-                    los_map[row, col] = 0.0
-                    break
-
-    return los_map
+    XX, YY = np.meshgrid(_COORDS, _COORDS)          # (40, 40)
+    dz = rx_height - tx_z
+    dist = np.sqrt((XX - tx_x) ** 2 + (YY - tx_y) ** 2 + dz ** 2).astype(np.float32)
+    max_dist = float(dist.max())
+    return (dist / max_dist).astype(np.float32) if max_dist > 0 else dist
 
 
 # ---------------------------------------------------------------------------
@@ -207,42 +247,47 @@ def _compute_los(
 
 def _save_height_png(height_norm: np.ndarray, path: str) -> None:
     fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(height_norm, cmap=_HEIGHT_CMAP, vmin=0, vmax=1,
+    im = ax.imshow(height_norm, cmap="gray", vmin=0, vmax=1,
                    origin="lower", extent=[-HALF, HALF, -HALF, HALF])
     ax.set_title("Height Map (normalized)")
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
+    ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
     plt.colorbar(im, ax=ax, label="normalized height")
     plt.tight_layout()
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
-def _save_material_png(material_raw_int: np.ndarray, path: str) -> None:
+def _save_material_eps_png(eps_map: np.ndarray, path: str) -> None:
     fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(material_raw_int, cmap=_MATERIAL_CMAP,
-                   vmin=-0.5, vmax=MATERIAL_MAX + 0.5,
+    im = ax.imshow(eps_map, cmap="plasma", vmin=0, vmax=1,
                    origin="lower", extent=[-HALF, HALF, -HALF, HALF])
-    ax.set_title("Material Map")
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
-    cbar = plt.colorbar(im, ax=ax, ticks=list(range(MATERIAL_MAX + 1)))
-    cbar.ax.set_yticklabels(
-        ["ground", "concrete", "marble", "metal", "wood", "glass"]
-    )
+    ax.set_title("Material Map — ε_r (normalized)")
+    ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
+    plt.colorbar(im, ax=ax, label="normalized permittivity ε_r")
     plt.tight_layout()
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
-def _save_los_png(los_map: np.ndarray, path: str) -> None:
+def _save_material_sigma_png(sigma_map: np.ndarray, path: str) -> None:
     fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(los_map, cmap=_LOS_CMAP, vmin=0, vmax=1,
+    im = ax.imshow(sigma_map, cmap="inferno", vmin=0, vmax=1,
                    origin="lower", extent=[-HALF, HALF, -HALF, HALF])
-    ax.set_title("LOS Map (green=LOS, red=NLOS)")
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
-    plt.colorbar(im, ax=ax, label="LOS (1=visible)")
+    ax.set_title("Material Map — σ (normalized)")
+    ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
+    plt.colorbar(im, ax=ax, label="normalized conductivity σ")
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _save_distance_png(dist_map: np.ndarray, path: str) -> None:
+    fig, ax = plt.subplots(figsize=(4, 4))
+    im = ax.imshow(dist_map, cmap="viridis_r", vmin=0, vmax=1,
+                   origin="lower", extent=[-HALF, HALF, -HALF, HALF])
+    ax.set_title("Distance Map to TX (normalized, dark=near)")
+    ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
+    plt.colorbar(im, ax=ax, label="normalized distance to TX")
     plt.tight_layout()
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -255,74 +300,87 @@ def _save_los_png(los_map: np.ndarray, path: str) -> None:
 def generate_scene_maps(
     scene_desc_path: str,
     output_dir: str,
-    resolution: int = 128,
+    resolution: int = 40,
 ) -> str:
     """
-    根据 scene_description.json 生成三通道场景地图。
+    根据 scene_description.json 生成四通道场景地图。
+
+    通道: [height_norm, eps_r_norm, sigma_norm, dist_norm]  shape (40, 40, 4)
 
     Args:
         scene_desc_path: simple_scene/{name}/scene_description.json 的路径
         output_dir:      输出目录（如 scene_maps/{name}/）
-        resolution:      暂仅支持默认值 128
+        resolution:      暂仅支持默认值 40（cell_size=5m）
 
     Returns:
         npy_path: 保存的 .npy 文件路径
     """
     if resolution != RESOLUTION:
-        print(f"[step5] WARNING: resolution={resolution} ignored，当前固定为 {RESOLUTION}")
+        print(f"[step5] WARNING: resolution={resolution} ignored，固定为 {RESOLUTION}")
 
     desc_path = Path(scene_desc_path)
     if not desc_path.exists():
         raise FileNotFoundError(f"[step5] 找不到场景描述文件：{desc_path}")
 
     full = json.loads(desc_path.read_text(encoding="utf-8"))
-    name = full.get("location_name") or desc_path.parent.name
-    scene = full.get("scene", full)
+    name      = full.get("location_name") or desc_path.parent.name
+    scene     = full.get("scene", full)
     buildings = scene.get("buildings", [])
 
-    tx = full.get("tx", {})
-    rx = full.get("rx", {})
-    tx_x = float(tx.get("x", 0.0))
-    tx_y = float(tx.get("y", 0.0))
-    tx_z = float(tx.get("z", 20.0))
+    tx        = full.get("tx", {})
+    rx        = full.get("rx", {})
+    tx_x      = float(tx.get("x", 0.0))
+    tx_y      = float(tx.get("y", 0.0))
+    tx_z      = float(tx.get("z", 20.0))
     rx_height = float(rx.get("rx_height", 1.5))
+    freq_ghz  = float(tx.get("frequency_ghz", 28.0))
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[step5] 场景 '{name}'：{len(buildings)} 栋建筑")
-    print(f"[step5] TX=({tx_x:.1f}, {tx_y:.1f}, {tx_z:.1f})m  RX高度={rx_height:.1f}m")
+    print(f"[step5] 场景 '{name}'：{len(buildings)} 栋建筑，频率={freq_ghz} GHz")
+    print(f"[step5] TX=({tx_x:.1f},{tx_y:.1f},{tx_z:.1f})m  RX高度={rx_height:.1f}m")
 
-    # ── 通道 0 + 1：高度图 & 材质图 ──────────────────────────────────────────
+    # ── 计算材质电磁属性及归一化 ─────────────────────────────────────────────
+    mat_norm, norm_params = compute_normalized_props(freq_ghz)
+    print(f"[step5] ε_r 范围：[{norm_params['eps_min']:.4f}, {norm_params['eps_max']:.4f}]")
+    print(f"[step5] σ   范围：[0, {norm_params['sigma_max']:.4e}] S/m（对数归一化）")
+
+    # 保存材质属性 JSON（含原始值和归一化值，供后续反归一化）
+    props_path = out_dir / f"{name}_material_props.json"
+    props_path.write_text(
+        json.dumps({"norm_params": norm_params, "materials": mat_norm},
+                   ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"[step5] 材质属性已保存：{props_path}")
+
+    # ── 通道 0/1/2：高度图 & 材质图（ε_r、σ） ────────────────────────────────
     print(f"[step5] 计算高度图和材质图…")
-    height_raw, material_map = _compute_height_material(buildings)
+    height_raw, eps_r_map, sigma_map = _compute_height_material(buildings, mat_norm)
 
     max_h = float(height_raw.max())
     height_norm = (height_raw / max_h).astype(np.float32) if max_h > 0 else height_raw.copy()
     print(f"[step5] 建筑物最大高度：{max_h:.1f} m")
 
-    # 材质图整数版本（用于可视化）
-    material_int = np.round(material_map * MATERIAL_MAX).astype(np.int32)
+    # ── 通道 3：距离图 ────────────────────────────────────────────────────────
+    dist_map = _compute_distance(tx_x, tx_y, tx_z, rx_height)
+    print(f"[step5] 距离图完成（TX=({tx_x:.1f},{tx_y:.1f})m，最大距离={dist_map.max() * dist_map.max():.0f}m²）")
 
-    # ── 通道 2：LOS 图 ────────────────────────────────────────────────────────
-    print(f"[step5] 计算 LOS 图（128×128 射线投影）…")
-    los_map = _compute_los(height_raw, tx_x, tx_y, tx_z, rx_height)
-    los_ratio = los_map.mean() * 100
-    print(f"[step5] LOS 覆盖率：{los_ratio:.1f}%")
-
-    # ── 拼合三通道 ─────────────────────────────────────────────────────────────
-    maps = np.stack([height_norm, material_map, los_map], axis=-1)  # (128, 128, 3)
+    # ── 拼合四通道 (40, 40, 4) ────────────────────────────────────────────────
+    maps = np.stack([height_norm, eps_r_map, sigma_map, dist_map], axis=-1)
 
     # ── 保存 .npy ─────────────────────────────────────────────────────────────
     npy_path = out_dir / f"{name}_maps.npy"
     np.save(str(npy_path), maps)
     print(f"[step5] 地图已保存：{npy_path}  shape={maps.shape} dtype={maps.dtype}")
 
-    # ── 保存三张 PNG ──────────────────────────────────────────────────────────
-    _save_height_png(height_norm,  str(out_dir / f"{name}_height.png"))
-    _save_material_png(material_int, str(out_dir / f"{name}_material.png"))
-    _save_los_png(los_map,         str(out_dir / f"{name}_los.png"))
-    print(f"[step5] PNG 已保存：{out_dir / name}_{{height,material,los}}.png")
+    # ── 保存四张 PNG ──────────────────────────────────────────────────────────
+    _save_height_png(height_norm,      str(out_dir / f"{name}_height.png"))
+    _save_material_eps_png(eps_r_map,  str(out_dir / f"{name}_material_eps.png"))
+    _save_material_sigma_png(sigma_map, str(out_dir / f"{name}_material_sigma.png"))
+    _save_distance_png(dist_map,       str(out_dir / f"{name}_distance.png"))
+    print(f"[step5] PNG 已保存至：{out_dir}")
 
     return str(npy_path)
 
@@ -332,16 +390,13 @@ def generate_scene_maps(
 # ---------------------------------------------------------------------------
 
 def _resolve_scene_desc(arg: str) -> str:
-    """接受场景名称或 JSON 文件路径，返回 scene_description.json 的路径。"""
     p = Path(arg)
     if p.suffix == ".json" and p.exists():
         return str(p)
-    # 按场景名称查找
-    candidates = [
+    for c in [
         Path("simple_scene") / arg / "scene_description.json",
         Path(arg) / "scene_description.json",
-    ]
-    for c in candidates:
+    ]:
         if c.exists():
             return str(c)
     raise FileNotFoundError(
@@ -354,17 +409,14 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
-
     arg = sys.argv[1]
     try:
         desc_path = _resolve_scene_desc(arg)
     except FileNotFoundError as e:
         print(f"[step5] 错误：{e}")
         sys.exit(1)
-
     name = Path(desc_path).parent.name
-    out_dir = str(Path("scene_maps") / name)
-    generate_scene_maps(desc_path, out_dir)
+    generate_scene_maps(desc_path, str(Path("scene_maps") / name))
 
 
 if __name__ == "__main__":

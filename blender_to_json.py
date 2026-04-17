@@ -64,17 +64,25 @@ def main():
         print(f"[blender_to_json] 错误：找不到 {pos_path}")
         print("请先在 Blender 脚本编辑器中运行对应的 _extract.py 脚本。")
         sys.exit(1)
-    positions = json.loads(pos_path.read_text(encoding="utf-8"))
+    _raw = json.loads(pos_path.read_text(encoding="utf-8"))
+    # 兼容旧格式（flat dict）和新格式（nested {"buildings": {...}, "roads": {...}}）
+    if "buildings" in _raw or "roads" in _raw:
+        bld_positions  = _raw.get("buildings", {})
+        road_positions = _raw.get("roads", {})
+    else:
+        bld_positions  = _raw
+        road_positions = {}
 
     # ── 读取原始场景 JSON（AI-1 完整格式）───────────────────────────────────
     full      = _load_full(name)
     scene     = full.get("scene", full)
     buildings = scene.get("buildings", [])
+    roads     = scene.get("roads", [])
 
-    # ── 应用 Blender 中的位置更新 ────────────────────────────────────────────
+    # ── 应用建筑位置更新 ──────────────────────────────────────────────────────
     print(f"[blender_to_json] 更新场景 '{name}'…")
     moved = 0
-    for idx_str, pos in positions.items():
+    for idx_str, pos in bld_positions.items():
         idx = int(idx_str)
         if not (0 <= idx < len(buildings)):
             print(f"  警告：building_{idx} 超出范围，跳过。")
@@ -100,7 +108,34 @@ def main():
                   f"({new_x:.2f}, {new_y:.2f})  Δ=({dx:+.2f}, {dy:+.2f})")
             moved += 1
 
-    print(f"[blender_to_json] {moved}/{len(positions)} 栋建筑位置已更改。")
+    print(f"[blender_to_json] {moved}/{len(bld_positions)} 栋建筑位置已更改。")
+
+    # ── 应用道路尺寸更新 ──────────────────────────────────────────────────────
+    import math as _math
+    road_moved = 0
+    for idx_str, pos in road_positions.items():
+        idx = int(idx_str)
+        if not (0 <= idx < len(roads)):
+            print(f"  警告：road_{idx} 超出范围，跳过。")
+            continue
+        r = roads[idx]
+        if "width_m" in pos:
+            r["width"] = round(float(pos["width_m"]), 2)
+        if "length_m" in pos and "cx" in pos and "cy" in pos and "rotation_deg" in pos:
+            _length = float(pos["length_m"])
+            _cx     = float(pos["cx"])
+            _cy     = float(pos["cy"])
+            _rot    = _math.radians(float(pos["rotation_deg"]))
+            _half   = _length / 2
+            _dx     = _math.cos(_rot) * _half
+            _dy     = _math.sin(_rot) * _half
+            r["start"] = [round(_cx - _dx, 2), round(_cy - _dy, 2)]
+            r["end"]   = [round(_cx + _dx, 2), round(_cy + _dy, 2)]
+            print(f"  road_{idx}: start={r['start']} end={r['end']} width={r['width']:.2f}m")
+            road_moved += 1
+
+    if road_positions:
+        print(f"[blender_to_json] {road_moved}/{len(road_positions)} 条道路尺寸已更新。")
 
     # ── 重叠检测 ──────────────────────────────────────────────────────────────
     overlaps = check_overlaps(scene)
