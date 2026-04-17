@@ -11,15 +11,15 @@ step5_scene_maps.py — 根据场景描述生成四通道场景地图
     {name}_height.png            通道0：建筑物高度图（归一化，灰度）
     {name}_material_eps.png      通道1：归一化相对介电常数图
     {name}_material_sigma.png    通道2：归一化电导率图
-    {name}_los.png               通道3：LOS 图（1=直视，0=遮挡）
+    {name}_distance.png          通道3：距离地图（每栅格中心到 TX 的欧几里得距离，归一化）
 
 通道说明:
     通道0 — 高度图：每格最高建筑物的高度，归一化到 [0, 1]
     通道1 — 归一化相对介电常数（ε_r_norm）：
             按 ITU-R P.2040 公式 ε_r = a·f^b 在场景频率下计算，min-max 归一化
     通道2 — 归一化电导率（σ_norm）：
-            按 ITU-R P.2040 公式 σ = c·f^d 在场景频率下计算，min-max 归一化
-    通道3 — LOS图：从发射机(TX)到该格点的直视路径，1.0=直视，0.0=遮挡
+            按 ITU-R P.2040 公式 σ = c·f^d 在场景频率下计算，对数归一化
+    通道3 — 距离图：每栅格点中心到 TX 的欧几里得距离，归一化到 [0, 1]
 
     背景（无建筑格点）使用地面材质 wet_ground 的归一化属性。
 
@@ -225,26 +225,16 @@ def _compute_height_material(
     return height_raw, eps_r_map, sigma_map
 
 
-def _compute_los(
-    height_raw: np.ndarray,
-    tx_x: float, tx_y: float, tx_z: float,
-    rx_height: float,
-) -> np.ndarray:
-    los_map = np.ones((RESOLUTION, RESOLUTION), dtype=np.float32)
-    tx_col, tx_row = _world_to_grid(tx_x, tx_y)
-    for row in range(RESOLUTION):
-        for col in range(RESOLUTION):
-            path = _bresenham_path(tx_col, tx_row, col, row)
-            if not path:
-                continue
-            total_dist = math.sqrt((col - tx_col) ** 2 + (row - tx_row) ** 2)
-            for mc, mr in path:
-                d = math.sqrt((mc - tx_col) ** 2 + (mr - tx_row) ** 2)
-                t = d / total_dist if total_dist > 0 else 0.0
-                if height_raw[mr, mc] > 0 and (tx_z + t * (rx_height - tx_z)) <= height_raw[mr, mc]:
-                    los_map[row, col] = 0.0
-                    break
-    return los_map
+def _compute_distance(tx_x: float, tx_y: float) -> np.ndarray:
+    """
+    计算每个栅格点中心到 TX 的欧几里得距离，归一化到 [0, 1]。
+
+    归一化基准：网格内距 TX 最远的栅格点距离（场景内最大值）。
+    """
+    XX, YY = np.meshgrid(_COORDS, _COORDS)          # (40, 40)
+    dist = np.sqrt((XX - tx_x) ** 2 + (YY - tx_y) ** 2).astype(np.float32)
+    max_dist = float(dist.max())
+    return (dist / max_dist).astype(np.float32) if max_dist > 0 else dist
 
 
 # ---------------------------------------------------------------------------
@@ -287,14 +277,13 @@ def _save_material_sigma_png(sigma_map: np.ndarray, path: str) -> None:
     plt.close(fig)
 
 
-def _save_los_png(los_map: np.ndarray, path: str) -> None:
-    _cmap = mcolors.ListedColormap(["#D63031", "#00B894"])
+def _save_distance_png(dist_map: np.ndarray, path: str) -> None:
     fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(los_map, cmap=_cmap, vmin=0, vmax=1,
+    im = ax.imshow(dist_map, cmap="viridis_r", vmin=0, vmax=1,
                    origin="lower", extent=[-HALF, HALF, -HALF, HALF])
-    ax.set_title("LOS Map (green=LOS, red=NLOS)")
+    ax.set_title("Distance Map to TX (normalized, dark=near)")
     ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
-    plt.colorbar(im, ax=ax, label="LOS (1=visible)")
+    plt.colorbar(im, ax=ax, label="normalized distance to TX")
     plt.tight_layout()
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -308,19 +297,16 @@ def generate_scene_maps(
     scene_desc_path: str,
     output_dir: str,
     resolution: int = 40,
-    los_map: "np.ndarray | None" = None,
 ) -> str:
     """
     根据 scene_description.json 生成四通道场景地图。
 
-    通道: [height_norm, eps_r_norm, sigma_norm, los]  shape (40, 40, 4)
+    通道: [height_norm, eps_r_norm, sigma_norm, dist_norm]  shape (40, 40, 4)
 
     Args:
         scene_desc_path: simple_scene/{name}/scene_description.json 的路径
         output_dir:      输出目录（如 scene_maps/{name}/）
         resolution:      暂仅支持默认值 40（cell_size=5m）
-        los_map:         可选，shape (40, 40) float32，由 step4 Sionna RT 计算。
-                         若提供则直接使用，否则退回 Bresenham 几何近似。
 
     Returns:
         npy_path: 保存的 .npy 文件路径
@@ -354,7 +340,7 @@ def generate_scene_maps(
     # ── 计算材质电磁属性及归一化 ─────────────────────────────────────────────
     mat_norm, norm_params = compute_normalized_props(freq_ghz)
     print(f"[step5] ε_r 范围：[{norm_params['eps_min']:.4f}, {norm_params['eps_max']:.4f}]")
-    print(f"[step5] σ   范围：[{norm_params['sigma_min']:.4e}, {norm_params['sigma_max']:.4e}] S/m")
+    print(f"[step5] σ   范围：[0, {norm_params['sigma_max']:.4e}] S/m（对数归一化）")
 
     # 保存材质属性 JSON（含原始值和归一化值，供后续反归一化）
     props_path = out_dir / f"{name}_material_props.json"
@@ -373,21 +359,12 @@ def generate_scene_maps(
     height_norm = (height_raw / max_h).astype(np.float32) if max_h > 0 else height_raw.copy()
     print(f"[step5] 建筑物最大高度：{max_h:.1f} m")
 
-    # ── 通道 3：LOS 图 ────────────────────────────────────────────────────────
-    if los_map is not None:
-        if los_map.shape != (RESOLUTION, RESOLUTION):
-            print(f"[step5] WARNING: los_map shape={los_map.shape} 不符，回退 Bresenham。")
-            los_map = _compute_los(height_raw, tx_x, tx_y, tx_z, rx_height)
-        else:
-            los_map = los_map.astype(np.float32)
-            print(f"[step5] 使用 Sionna RT LOS 图（来自 step4）。")
-    else:
-        print(f"[step5] 计算 LOS 图（Bresenham 几何近似）…")
-        los_map = _compute_los(height_raw, tx_x, tx_y, tx_z, rx_height)
-    print(f"[step5] LOS 覆盖率：{los_map.mean() * 100:.1f}%")
+    # ── 通道 3：距离图 ────────────────────────────────────────────────────────
+    dist_map = _compute_distance(tx_x, tx_y)
+    print(f"[step5] 距离图完成（TX=({tx_x:.1f},{tx_y:.1f})m，最大距离={dist_map.max() * dist_map.max():.0f}m²）")
 
     # ── 拼合四通道 (40, 40, 4) ────────────────────────────────────────────────
-    maps = np.stack([height_norm, eps_r_map, sigma_map, los_map], axis=-1)
+    maps = np.stack([height_norm, eps_r_map, sigma_map, dist_map], axis=-1)
 
     # ── 保存 .npy ─────────────────────────────────────────────────────────────
     npy_path = out_dir / f"{name}_maps.npy"
@@ -398,7 +375,7 @@ def generate_scene_maps(
     _save_height_png(height_norm,      str(out_dir / f"{name}_height.png"))
     _save_material_eps_png(eps_r_map,  str(out_dir / f"{name}_material_eps.png"))
     _save_material_sigma_png(sigma_map, str(out_dir / f"{name}_material_sigma.png"))
-    _save_los_png(los_map,             str(out_dir / f"{name}_los.png"))
+    _save_distance_png(dist_map,       str(out_dir / f"{name}_distance.png"))
     print(f"[step5] PNG 已保存至：{out_dir}")
 
     return str(npy_path)

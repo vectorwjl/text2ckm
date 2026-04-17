@@ -198,7 +198,7 @@ def main():
         print(f"[blender_to_json] Path gain 已保存：{photo_path}")
 
         maps_dir = str(Path("scene_maps") / name)
-        generate_scene_maps(str(scene_desc_path), maps_dir, los_map=los_map)
+        generate_scene_maps(str(scene_desc_path), maps_dir)
         print(f"[blender_to_json] 场景地图已保存：{maps_dir}")
     except Exception as e:
         print(f"[blender_to_json] 场景生成失败（可手动运行 main.py）：{e}")

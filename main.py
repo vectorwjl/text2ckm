@@ -172,7 +172,7 @@ def main():
         # Step 5: 多通道场景地图（高度图/材质图/LOS图）
         maps_dir = str(Path("scene_maps") / name)
         try:
-            generate_scene_maps(str(scene_desc_path), maps_dir, los_map=los_map)
+            generate_scene_maps(str(scene_desc_path), maps_dir)
         except Exception as e:
             print(f"[main] WARNING: Scene maps generation failed: {e}")
 
