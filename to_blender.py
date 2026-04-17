@@ -192,10 +192,154 @@ for _area in bpy.context.screen.areas:
         _r3d.view_distance = 250
         break
 
-# ── 双击编辑建筑尺寸算子 ────────────────────────────────────────────────────
+# ── 建筑物拖拽缩放算子 ──────────────────────────────────────────────────────
+import gpu
+from gpu_extras.batch import batch_for_shader
+import blf
+from bpy_extras import view3d_utils
+
+_HANDLE_PX = 8
+_MIN_DIM   = 1.0
+
+def _get_local_dims(obj):
+    return obj.scale.x * 2, obj.scale.y * 2, obj.scale.z * 2
+
+def _edge_centers_world(obj):
+    bx, by, bz = obj.location
+    w, l, _ = _get_local_dims(obj)
+    rot = obj.rotation_euler.z
+    c, s = math.cos(rot), math.sin(rot)
+    return {{
+        'px': mathutils.Vector((bx + w/2*c,  by + w/2*s,  bz)),
+        'nx': mathutils.Vector((bx - w/2*c,  by - w/2*s,  bz)),
+        'py': mathutils.Vector((bx - l/2*s,  by + l/2*c,  bz)),
+        'ny': mathutils.Vector((bx + l/2*s,  by - l/2*c,  bz)),
+    }}
+
+class CKM_OT_resize_building(bpy.types.Operator):
+    bl_idname  = "object.ckm_resize_building"
+    bl_label   = "拖拽调整建筑尺寸"
+    bl_options = {{'REGISTER', 'UNDO'}}
+    _handle = None; _obj = None; _drag = None
+    _start_mxy = None; _start_w = 0.0; _start_l = 0.0
+    _start_loc = None; _orig_scale = None; _orig_loc = None
+
+    def _w2s(self, ctx, pos):
+        return view3d_utils.location_3d_to_region_2d(ctx.region, ctx.region_data, pos)
+
+    def _s2w(self, ctx, mxy):
+        return view3d_utils.region_2d_to_location_3d(
+            ctx.region, ctx.region_data, mxy, self._obj.location)
+
+    def _find_edge(self, ctx, mx, my):
+        best, best_d = None, _HANDLE_PX * 2.5
+        for eid, wpos in _edge_centers_world(self._obj).items():
+            sp = self._w2s(ctx, wpos)
+            if sp is None: continue
+            d = ((mx - sp.x)**2 + (my - sp.y)**2) ** 0.5
+            if d < best_d: best, best_d = eid, d
+        return best
+
+    def _draw_cb(self, ctx):
+        if self._obj is None: return
+        edges  = _edge_centers_world(self._obj)
+        shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+        gpu.state.blend_set('ALPHA')
+        s = _HANDLE_PX
+        for eid, wpos in edges.items():
+            sp = self._w2s(ctx, wpos)
+            if sp is None: continue
+            sx, sy = sp.x, sp.y
+            col = (1.0, 0.2, 0.2, 1.0) if eid == self._drag else (1.0, 0.9, 0.0, 1.0)
+            batch = batch_for_shader(shader, 'TRI_FAN',
+                {{"pos": [(sx-s,sy-s),(sx+s,sy-s),(sx+s,sy+s),(sx-s,sy+s)]}})
+            shader.uniform_float("color", col)
+            batch.draw(shader)
+        gpu.state.blend_set('NONE')
+        w, l, h = _get_local_dims(self._obj)
+        blf.position(0, 15, 15, 0)
+        blf.size(0, 16)
+        blf.color(0, 1.0, 1.0, 1.0, 1.0)
+        blf.draw(0, f"W={{w:.1f}}m  L={{l:.1f}}m  H={{h:.1f}}m    拖拽黄点调整长宽 | D 精确输入 | ESC 取消")
+
+    def invoke(self, context, event):
+        obj = context.active_object
+        if obj is None or not obj.name.startswith("building_"):
+            return {{'CANCELLED'}}
+        self._obj        = obj
+        self._orig_scale = obj.scale.copy()
+        self._orig_loc   = obj.location.copy()
+        self._handle = bpy.types.SpaceView3D.draw_handler_add(
+            self._draw_cb, (context,), 'WINDOW', 'POST_PIXEL')
+        context.window_manager.modal_handler_add(self)
+        return {{'RUNNING_MODAL'}}
+
+    def modal(self, context, event):
+        context.area.tag_redraw()
+        mx, my = event.mouse_region_x, event.mouse_region_y
+        if event.type == 'MOUSEMOVE':
+            if self._drag: self._do_drag(context, mx, my)
+            return {{'RUNNING_MODAL'}}
+        if event.type == 'LEFTMOUSE':
+            if event.value == 'PRESS':
+                eid = self._find_edge(context, mx, my)
+                if eid:
+                    self._drag = eid
+                    self._start_mxy = (mx, my)
+                    w, l, _ = _get_local_dims(self._obj)
+                    self._start_w = w; self._start_l = l
+                    self._start_loc = self._obj.location.copy()
+                else:
+                    self._finish(context); return {{'FINISHED'}}
+            elif event.value == 'RELEASE':
+                self._drag = None
+            return {{'RUNNING_MODAL'}}
+        if event.type == 'D' and event.value == 'PRESS':
+            self._finish(context)
+            bpy.ops.object.ckm_edit_dims('INVOKE_DEFAULT')
+            return {{'FINISHED'}}
+        if event.type in {{'RIGHTMOUSE', 'ESC'}}:
+            self._obj.scale    = self._orig_scale
+            self._obj.location = self._orig_loc
+            self._finish(context); return {{'CANCELLED'}}
+        return {{'PASS_THROUGH'}}
+
+    def _do_drag(self, context, mx, my):
+        obj = self._obj
+        rot = obj.rotation_euler.z
+        c, s = math.cos(rot), math.sin(rot)
+        p0 = self._s2w(context, self._start_mxy)
+        p1 = self._s2w(context, (mx, my))
+        if p0 is None or p1 is None: return
+        d = p1 - p0
+        if self._drag in ('px', 'nx'):
+            proj  = d.x * c + d.y * s
+            sign  = 1 if self._drag == 'px' else -1
+            new_w = max(_MIN_DIM, self._start_w + sign * proj)
+            dw    = new_w - self._start_w
+            obj.scale.x = new_w / 2
+            obj.location.x = self._start_loc.x + (dw/2) * sign * c
+            obj.location.y = self._start_loc.y + (dw/2) * sign * s
+            obj["ckm_width"] = new_w
+        else:
+            proj  = d.x * (-s) + d.y * c
+            sign  = 1 if self._drag == 'py' else -1
+            new_l = max(_MIN_DIM, self._start_l + sign * proj)
+            dl    = new_l - self._start_l
+            obj.scale.y = new_l / 2
+            obj.location.x = self._start_loc.x + (dl/2) * sign * (-s)
+            obj.location.y = self._start_loc.y + (dl/2) * sign * c
+            obj["ckm_length"] = new_l
+
+    def _finish(self, context):
+        if self._handle:
+            bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
+            self._handle = None
+        context.area.tag_redraw()
+
 class OBJECT_OT_ckm_edit_dims(bpy.types.Operator):
     bl_idname = "object.ckm_edit_dims"
-    bl_label  = "编辑建筑尺寸"
+    bl_label  = "编辑建筑尺寸（精确输入）"
     width:  bpy.props.FloatProperty(name="宽度 (m)", min=0.5, max=500.0)
     length: bpy.props.FloatProperty(name="长度 (m)", min=0.5, max=500.0)
     height: bpy.props.FloatProperty(name="高度 (m)", min=0.5, max=500.0)
@@ -204,9 +348,8 @@ class OBJECT_OT_ckm_edit_dims(bpy.types.Operator):
         obj = context.active_object
         if obj is None or not obj.name.startswith("building_"):
             return {{'CANCELLED'}}
-        self.width  = float(obj.get("ckm_width",  obj.dimensions.x))
-        self.length = float(obj.get("ckm_length", obj.dimensions.y))
-        self.height = float(obj.get("ckm_height", obj.dimensions.z))
+        w, l, h = _get_local_dims(obj)
+        self.width, self.length, self.height = w, l, h
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
@@ -223,13 +366,14 @@ class OBJECT_OT_ckm_edit_dims(bpy.types.Operator):
         obj["ckm_height"] = self.height
         return {{'FINISHED'}}
 
-if hasattr(bpy.types, "OBJECT_OT_ckm_edit_dims"):
-    bpy.utils.unregister_class(bpy.types.OBJECT_OT_ckm_edit_dims)
-bpy.utils.register_class(OBJECT_OT_ckm_edit_dims)
+for _cls in (CKM_OT_resize_building, OBJECT_OT_ckm_edit_dims):
+    if hasattr(bpy.types, _cls.__name__):
+        bpy.utils.unregister_class(getattr(bpy.types, _cls.__name__))
+    bpy.utils.register_class(_cls)
 _kc = bpy.context.window_manager.keyconfigs.addon
 if _kc:
     _km  = _kc.keymaps.new(name="Object Mode", space_type="EMPTY")
-    _kmi = _km.keymap_items.new("object.ckm_edit_dims", "LEFTMOUSE", "DOUBLE_CLICK")
+    _kmi = _km.keymap_items.new("object.ckm_resize_building", "LEFTMOUSE", "DOUBLE_CLICK")
 
 print(f"[setup] 场景 '{name}' 已加载：{{len(_buildings)}} 栋建筑，{{len(_roads)}} 条道路。")
 print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{name}/{name}_extract.py")
