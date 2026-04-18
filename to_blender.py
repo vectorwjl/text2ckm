@@ -163,6 +163,8 @@ for _i, _b in enumerate(_buildings):
     _obj["ckm_width"]  = float(_b.get("width",  _b.get("bottom_width", 10)))
     _obj["ckm_length"] = float(_b.get("length", 10))
     _obj["ckm_height"] = _h
+    _obj.lock_rotation[0] = True   # 禁止 X/Y 轴倾斜，只允许绕 Z 轴旋转
+    _obj.lock_rotation[1] = True
 
 # ── 道路（仅可视化参考，不导出坐标）────────────────────────────────────────
 for _i, _r in enumerate(_roads):
@@ -181,6 +183,12 @@ for _i, _r in enumerate(_roads):
     _ro.rotation_euler = (0, 0, __import__("math").atan2(_dy, _dx))
     _ro.name           = f"road_{{_i}}"
     _ro.data.materials.append(_M["road"])
+    _ro["ckm_road_length"] = round(_rl, 2)
+    _ro["ckm_road_width"]  = round(_rw, 2)
+    _ro["ckm_road_cx"]     = round(_cx, 2)
+    _ro["ckm_road_cy"]     = round(_cy, 2)
+    _ro.lock_rotation[0]   = True
+    _ro.lock_rotation[1]   = True
 
 # ── 俯视正交视角 ─────────────────────────────────────────────────────────────
 import mathutils
@@ -218,7 +226,7 @@ def _edge_centers_world(obj):
 
 class CKM_OT_resize_building(bpy.types.Operator):
     bl_idname  = "object.ckm_resize_building"
-    bl_label   = "拖拽调整建筑尺寸"
+    bl_label   = "拖拽调整建筑/道路尺寸"
     bl_options = {{'REGISTER', 'UNDO'}}
     _handle = None; _obj = None; _drag = None
     _start_mxy = None; _start_w = 0.0; _start_l = 0.0
@@ -260,11 +268,14 @@ class CKM_OT_resize_building(bpy.types.Operator):
         blf.position(0, 15, 15, 0)
         blf.size(0, 16)
         blf.color(0, 1.0, 1.0, 1.0, 1.0)
-        blf.draw(0, f"W={{w:.1f}}m  L={{l:.1f}}m  H={{h:.1f}}m    拖拽黄点调整长宽 | D 精确输入 | ESC 取消")
+        if self._obj.name.startswith("road_"):
+            blf.draw(0, f"路长={{w:.1f}}m  路宽={{l:.1f}}m    拖拽黄点调整长宽 | D 精确输入 | ESC 取消")
+        else:
+            blf.draw(0, f"W={{w:.1f}}m  L={{l:.1f}}m  H={{h:.1f}}m    拖拽黄点调整长宽 | D 精确输入 | ESC 取消")
 
     def invoke(self, context, event):
         obj = context.active_object
-        if obj is None or not obj.name.startswith("building_"):
+        if obj is None or not (obj.name.startswith("building_") or obj.name.startswith("road_")):
             return {{'CANCELLED'}}
         self._obj        = obj
         self._orig_scale = obj.scale.copy()
@@ -296,7 +307,10 @@ class CKM_OT_resize_building(bpy.types.Operator):
             return {{'RUNNING_MODAL'}}
         if event.type == 'D' and event.value == 'PRESS':
             self._finish(context)
-            bpy.ops.object.ckm_edit_dims('INVOKE_DEFAULT')
+            if self._obj.name.startswith("road_"):
+                bpy.ops.object.ckm_edit_road_dims('INVOKE_DEFAULT')
+            else:
+                bpy.ops.object.ckm_edit_dims('INVOKE_DEFAULT')
             return {{'FINISHED'}}
         if event.type in {{'RIGHTMOUSE', 'ESC'}}:
             self._obj.scale    = self._orig_scale
@@ -306,6 +320,7 @@ class CKM_OT_resize_building(bpy.types.Operator):
 
     def _do_drag(self, context, mx, my):
         obj = self._obj
+        is_road = obj.name.startswith("road_")
         rot = obj.rotation_euler.z
         c, s = math.cos(rot), math.sin(rot)
         p0 = self._s2w(context, self._start_mxy)
@@ -320,7 +335,10 @@ class CKM_OT_resize_building(bpy.types.Operator):
             obj.scale.x = new_w / 2
             obj.location.x = self._start_loc.x + (dw/2) * sign * c
             obj.location.y = self._start_loc.y + (dw/2) * sign * s
-            obj["ckm_width"] = new_w
+            if is_road:
+                obj["ckm_road_length"] = new_w
+            else:
+                obj["ckm_width"] = new_w
         else:
             proj  = d.x * (-s) + d.y * c
             sign  = 1 if self._drag == 'py' else -1
@@ -329,7 +347,10 @@ class CKM_OT_resize_building(bpy.types.Operator):
             obj.scale.y = new_l / 2
             obj.location.x = self._start_loc.x + (dl/2) * sign * (-s)
             obj.location.y = self._start_loc.y + (dl/2) * sign * c
-            obj["ckm_length"] = new_l
+            if is_road:
+                obj["ckm_road_width"] = new_l
+            else:
+                obj["ckm_length"] = new_l
 
     def _finish(self, context):
         if self._handle:
@@ -366,7 +387,31 @@ class OBJECT_OT_ckm_edit_dims(bpy.types.Operator):
         obj["ckm_height"] = self.height
         return {{'FINISHED'}}
 
-for _cls in (CKM_OT_resize_building, OBJECT_OT_ckm_edit_dims):
+class OBJECT_OT_ckm_edit_road_dims(bpy.types.Operator):
+    bl_idname = "object.ckm_edit_road_dims"
+    bl_label  = "编辑道路尺寸（精确输入）"
+    length: bpy.props.FloatProperty(name="路长 (m)", min=0.5, max=2000.0)
+    width:  bpy.props.FloatProperty(name="路宽 (m)", min=0.5, max=100.0)
+
+    def invoke(self, context, event):
+        obj = context.active_object
+        if obj is None or not obj.name.startswith("road_"):
+            return {{'CANCELLED'}}
+        _l, _w, _ = _get_local_dims(obj)
+        self.length = float(obj["ckm_road_length"]) if "ckm_road_length" in obj else _l
+        self.width  = float(obj["ckm_road_width"])  if "ckm_road_width"  in obj else _w
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None:
+            return {{'CANCELLED'}}
+        obj.dimensions = (self.length, self.width, 0.2)
+        obj["ckm_road_length"] = self.length
+        obj["ckm_road_width"]  = self.width
+        return {{'FINISHED'}}
+
+for _cls in (CKM_OT_resize_building, OBJECT_OT_ckm_edit_dims, OBJECT_OT_ckm_edit_road_dims):
     if hasattr(bpy.types, _cls.__name__):
         bpy.utils.unregister_class(getattr(bpy.types, _cls.__name__))
     bpy.utils.register_class(_cls)
@@ -374,6 +419,28 @@ _kc = bpy.context.window_manager.keyconfigs.addon
 if _kc:
     _km  = _kc.keymaps.new(name="Object Mode", space_type="EMPTY")
     _kmi = _km.keymap_items.new("object.ckm_resize_building", "LEFTMOUSE", "DOUBLE_CLICK")
+
+# ── 强制建筑/道路保持竖立（清零 X/Y 旋转，防止任何视角下操作导致倾斜）───────
+_ckm_enforcing = False
+def _ckm_enforce_upright(scene, depsgraph):
+    global _ckm_enforcing
+    if _ckm_enforcing: return
+    _ckm_enforcing = True
+    try:
+        for _upd in depsgraph.updates:
+            if not isinstance(_upd.id, bpy.types.Object): continue
+            _o = _upd.id
+            if not (_o.name.startswith("building_") or _o.name.startswith("road_")): continue
+            if abs(_o.rotation_euler.x) > 1e-6 or abs(_o.rotation_euler.y) > 1e-6:
+                _o.rotation_euler.x = 0.0
+                _o.rotation_euler.y = 0.0
+    finally:
+        _ckm_enforcing = False
+
+for _h in list(bpy.app.handlers.depsgraph_update_post):
+    if getattr(_h, '__name__', '') == '_ckm_enforce_upright':
+        bpy.app.handlers.depsgraph_update_post.remove(_h)
+bpy.app.handlers.depsgraph_update_post.append(_ckm_enforce_upright)
 
 print(f"[setup] 场景 '{name}' 已加载：{{len(_buildings)}} 栋建筑，{{len(_roads)}} 条道路。")
 print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{name}/{name}_extract.py")
@@ -415,7 +482,7 @@ def _get_script_dir():
         "请在 Blender Scripting 标签页中用 Open 打开此脚本文件后再运行。"
     )
 
-_out = {{}}
+_buildings_out = {{}}
 for _obj in bpy.data.objects:
     if not _obj.name.startswith("building_"):
         continue
@@ -423,13 +490,12 @@ for _obj in bpy.data.objects:
         _idx = int(_obj.name.split("_")[1])
     except (IndexError, ValueError):
         continue
-    # matrix_world 包含父对象变换（若有），更准确
     _t   = _obj.matrix_world.translation
-    _r   = _obj.matrix_world.to_euler()[2]         # Z 轴旋转（弧度）
-    _h_m = round(float(_obj.dimensions.z), 2)      # 当前高度（含用户修改）
+    _r   = _obj.matrix_world.to_euler()[2]
+    _h_m = round(float(_obj.dimensions.z), 2)
     _w_m = round(float(_obj["ckm_width"])  if "ckm_width"  in _obj else _obj.dimensions.x, 2)
     _l_m = round(float(_obj["ckm_length"]) if "ckm_length" in _obj else _obj.dimensions.y, 2)
-    _out[str(_idx)] = {{
+    _buildings_out[str(_idx)] = {{
         "x":            round(float(_t.x), 2),
         "y":            round(float(_t.y), 2),
         "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
@@ -438,10 +504,31 @@ for _obj in bpy.data.objects:
         "length_m":     _l_m,
     }}
 
+_roads_out = {{}}
+for _obj in bpy.data.objects:
+    if not _obj.name.startswith("road_"):
+        continue
+    try:
+        _idx = int(_obj.name.split("_")[1])
+    except (IndexError, ValueError):
+        continue
+    _t  = _obj.matrix_world.translation
+    _r  = _obj.matrix_world.to_euler()[2]
+    _rl = round(float(_obj["ckm_road_length"]) if "ckm_road_length" in _obj else _obj.dimensions.x, 2)
+    _rw = round(float(_obj["ckm_road_width"])  if "ckm_road_width"  in _obj else _obj.dimensions.y, 2)
+    _roads_out[str(_idx)] = {{
+        "cx":           round(float(_t.x), 2),
+        "cy":           round(float(_t.y), 2),
+        "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
+        "length_m":     _rl,
+        "width_m":      _rw,
+    }}
+
+_out = {{"buildings": _buildings_out, "roads": _roads_out}}
 _path = _get_script_dir() / "{name}_positions.json"
 _path.parent.mkdir(parents=True, exist_ok=True)
 _path.write_text(json.dumps(_out, indent=2, ensure_ascii=False), encoding="utf-8")
-print(f"[extract] {{len(_out)}} 栋建筑已导出到 {{_path}}")
+print(f"[extract] {{len(_buildings_out)}} 栋建筑、{{len(_roads_out)}} 条道路已导出到 {{_path}}")
 print("[extract] 下一步：python blender_to_json.py {name}")
 '''
 
