@@ -420,6 +420,28 @@ if _kc:
     _km  = _kc.keymaps.new(name="Object Mode", space_type="EMPTY")
     _kmi = _km.keymap_items.new("object.ckm_resize_building", "LEFTMOUSE", "DOUBLE_CLICK")
 
+# ── 强制建筑/道路保持竖立（清零 X/Y 旋转，防止任何视角下操作导致倾斜）───────
+_ckm_enforcing = False
+def _ckm_enforce_upright(scene, depsgraph):
+    global _ckm_enforcing
+    if _ckm_enforcing: return
+    _ckm_enforcing = True
+    try:
+        for _upd in depsgraph.updates:
+            if not isinstance(_upd.id, bpy.types.Object): continue
+            _o = _upd.id
+            if not (_o.name.startswith("building_") or _o.name.startswith("road_")): continue
+            if abs(_o.rotation_euler.x) > 1e-6 or abs(_o.rotation_euler.y) > 1e-6:
+                _o.rotation_euler.x = 0.0
+                _o.rotation_euler.y = 0.0
+    finally:
+        _ckm_enforcing = False
+
+for _h in list(bpy.app.handlers.depsgraph_update_post):
+    if getattr(_h, '__name__', '') == '_ckm_enforce_upright':
+        bpy.app.handlers.depsgraph_update_post.remove(_h)
+bpy.app.handlers.depsgraph_update_post.append(_ckm_enforce_upright)
+
 print(f"[setup] 场景 '{name}' 已加载：{{len(_buildings)}} 栋建筑，{{len(_roads)}} 条道路。")
 print(f"[setup] 操作完成后，在脚本编辑器中运行 blender_scenes/{name}/{name}_extract.py")
 '''
