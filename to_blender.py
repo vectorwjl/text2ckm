@@ -130,8 +130,7 @@ _g.name = "ground"
 _g.data.materials.append(_M["ground"])
 
 # ── 建筑物 ──────────────────────────────────────────────────────────────────
-# 每栋建筑以立方体近似（梯形也用最大宽度），不 apply transform，
-# 保留 location / rotation_euler 供 extract 脚本读回。
+import bmesh as _bmesh_mod
 for _i, _b in enumerate(_buildings):
     _btype = _b.get("type", "rectangular")
     _x     = float(_b.get("x", 0))
@@ -139,31 +138,53 @@ for _i, _b in enumerate(_buildings):
     _h     = float(_b.get("height", 10))
     _rot   = float(_b.get("rotation_deg", 0))
 
-    bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0))
-    _obj = bpy.context.active_object
-
-    if _btype == "rectangular":
-        _w = float(_b.get("width",  10))
-        _l = float(_b.get("length", 10))
-        _obj.dimensions = (_w, _l, _h)
-        _obj.data.materials.append(_M["rectangular"])
-    elif _btype == "trapezoidal":
+    if _btype == "trapezoidal":
         _bw = float(_b.get("bottom_width", 12))
-        _l  = float(_b.get("length",       12))
-        _obj.dimensions = (_bw, _l, _h)
+        _tw = float(_b.get("top_width", 8))
+        _l  = float(_b.get("length", 12))
+        _hw_bot, _hw_top, _hl = _bw/2, _tw/2, _l/2
+        _verts = [
+            (-_hw_bot, -_hl, 0),  ( _hw_bot, -_hl, 0),
+            ( _hw_top,  _hl, 0),  (-_hw_top,  _hl, 0),
+            (-_hw_bot, -_hl, _h), ( _hw_bot, -_hl, _h),
+            ( _hw_top,  _hl, _h), (-_hw_top,  _hl, _h),
+        ]
+        _faces_t = [(0,1,2,3),(7,6,5,4),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+        _bme = _bmesh_mod.new()
+        _vl  = [_bme.verts.new(v) for v in _verts]
+        _bme.verts.ensure_lookup_table()
+        for _f in _faces_t: _bme.faces.new([_vl[i] for i in _f])
+        _mesh_t = bpy.data.meshes.new(f"trap_mesh_{{_i}}")
+        _bme.to_mesh(_mesh_t); _bme.free()
+        _obj = bpy.data.objects.new(f"trap_{{_i}}", _mesh_t)
+        bpy.context.collection.objects.link(_obj)
+        bpy.context.view_layer.objects.active = _obj
+        _obj.select_set(True)
         _obj.data.materials.append(_M["trapezoidal"])
+        _obj.location       = (_x, _y, 0)   # 顶点已含 z=0..h，无需偏移
+        _obj["ckm_width"]   = _bw
+        _obj["ckm_length"]  = _l
     else:
-        _obj.dimensions = (10, 10, _h)
-        _obj.data.materials.append(_M["other"])
+        bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0))
+        _obj = bpy.context.active_object
+        if _btype == "rectangular":
+            _w = float(_b.get("width",  10))
+            _l = float(_b.get("length", 10))
+            _obj.dimensions = (_w, _l, _h)
+            _obj.data.materials.append(_M["rectangular"])
+            _obj["ckm_width"]  = _w
+            _obj["ckm_length"] = _l
+        else:
+            _obj.dimensions = (10, 10, _h)
+            _obj.data.materials.append(_M["other"])
+            _obj["ckm_width"]  = 10.0
+            _obj["ckm_length"] = 10.0
+        _obj.location = (_x, _y, _h / 2)
 
-    # 位置和旋转作为对象属性保留，不 apply
-    _obj.location       = (_x, _y, _h / 2)
-    _obj.rotation_euler = (0.0, 0.0, math.radians(_rot))
-    _obj.name           = f"building_{{_i}}"
-    _obj["ckm_width"]  = float(_b.get("width",  _b.get("bottom_width", 10)))
-    _obj["ckm_length"] = float(_b.get("length", 10))
-    _obj["ckm_height"] = _h
-    _obj.lock_rotation[0] = True   # 禁止 X/Y 轴倾斜，只允许绕 Z 轴旋转
+    _obj.rotation_euler   = (0.0, 0.0, math.radians(_rot))
+    _obj.name             = f"building_{{_i}}"
+    _obj["ckm_height"]    = _h
+    _obj.lock_rotation[0] = True
     _obj.lock_rotation[1] = True
 
 # ── 道路（仅可视化参考，不导出坐标）────────────────────────────────────────
