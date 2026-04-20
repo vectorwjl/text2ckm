@@ -27,6 +27,83 @@ from overlap_checker import building_to_polygon, _desc_building, check_overlaps
 MAP_HALF_SIZE = 100.0      # 200m × 200m 场景：坐标范围 ±100m
 CLEARANCE = 5.0            # 建筑物之间最小净距
 
+
+def _normalize(dx: float, dy: float) -> tuple:
+    d = math.hypot(dx, dy)
+    return (dx / d, dy / d) if d > 1e-9 else (1.0, 0.0)
+
+
+def resolve_overlaps_auto(
+    scene_data: dict,
+    max_iter: int = 150,
+    alpha: float = 0.8,
+    beta: float = 0.03,
+) -> "tuple[dict, bool]":
+    """
+    Jacobi-style push-apart with elastic restoring force.
+
+    道路固定不动，只移动建筑的 (x, y)。每轮先对所有建筑累积推力向量
+    再同步应用（Jacobi），避免 Gauss-Seidel 的顺序依赖振荡。
+    弹性回弹力（beta * (orig - current)）防止建筑无限漂移。
+
+    Returns:
+        (modified_scene_data, converged: bool)
+        若未完全收敛，返回迭代过程中总重叠面积最小的历史快照。
+    """
+    scene = copy.deepcopy(scene_data)
+    buildings = scene["buildings"]
+    orig_pos = [(float(b["x"]), float(b["y"])) for b in buildings]
+
+    best_scene = copy.deepcopy(scene)
+    best_area = float("inf")
+
+    for iteration in range(max_iter):
+        overlaps = check_overlaps(scene)
+        total_area = sum(o["overlap_area_m2"] for o in overlaps)
+
+        if total_area < best_area:
+            best_area = total_area
+            best_scene = copy.deepcopy(scene)
+
+        if not overlaps:
+            return scene, True
+
+        delta = [[0.0, 0.0] for _ in buildings]
+        for ov in overlaps:
+            cx, cy = ov["overlap_centroid"]
+            push = math.sqrt(ov["overlap_area_m2"]) + 0.5
+
+            if ov["type"] == "building_building":
+                i, j = ov["a_idx"], ov["b_idx"]
+                xi, yi = float(buildings[i]["x"]), float(buildings[i]["y"])
+                xj, yj = float(buildings[j]["x"]), float(buildings[j]["y"])
+                dxi, dyi = _normalize(xi - cx, yi - cy)
+                dxj, dyj = _normalize(xj - cx, yj - cy)
+                delta[i][0] += dxi * push * alpha
+                delta[i][1] += dyi * push * alpha
+                delta[j][0] += dxj * push * alpha
+                delta[j][1] += dyj * push * alpha
+
+            elif ov["type"] == "building_road":
+                i = ov["a_idx"]
+                xi, yi = float(buildings[i]["x"]), float(buildings[i]["y"])
+                dxi, dyi = _normalize(xi - cx, yi - cy)
+                delta[i][0] += dxi * push * alpha
+                delta[i][1] += dyi * push * alpha
+
+        for i, b in enumerate(buildings):
+            ox, oy = orig_pos[i]
+            nx = float(b["x"]) + delta[i][0] + beta * (ox - float(b["x"]))
+            ny = float(b["y"]) + delta[i][1] + beta * (oy - float(b["y"]))
+            b["x"] = round(max(-95.0, min(95.0, nx)), 4)
+            b["y"] = round(max(-95.0, min(95.0, ny)), 4)
+
+        if iteration > 0 and iteration % 50 == 0:
+            print(f"[resolver] iter {iteration}: {len(overlaps)} overlap(s), "
+                  f"total_area={total_area:.1f} m²")
+
+    return best_scene, False
+
 # 使用轴对齐推开的风格
 _AXIS_SNAP_STYLES = {"orthogonal_grid", "slab_row"}
 # 使用径向推开的风格

@@ -11,6 +11,7 @@ from step3_render_topdown import render_topdown
 from step4_path_gain import generate_path_gain
 from step5_scene_maps import generate_scene_maps
 from overlap_checker import check_overlaps
+from overlap_resolver import resolve_overlaps_auto
 import to_blender as _to_blender
 
 EXAMPLE_JSON_DIR = Path("example_json")
@@ -70,11 +71,29 @@ def main():
         overlaps = check_overlaps(scene_data)
 
         if overlaps:
-            print(f"[main] ⚠ 检测到 {len(overlaps)} 处建筑物重叠，需要在 Blender 中手动调整：")
+            print(f"[main] ⚠ 检测到 {len(overlaps)} 处重叠，尝试自动解析...")
             for ov in overlaps:
                 print(f"  {ov['a_desc']}  ×  {ov['b_desc']}  "
-                      f"({ov['overlap_area_m2']:.2f} m²，重心 {ov['overlap_centroid']})")
+                      f"({ov['overlap_area_m2']:.2f} m²)")
 
+            scene_data, converged = resolve_overlaps_auto(scene_data)
+            overlaps = check_overlaps(scene_data)
+
+            if not overlaps:
+                print(f"[main] ✓ 自动消除重叠成功，更新 JSON 继续流程。")
+                result_with_material["scene"]["buildings"] = scene_data["buildings"]
+                json_path.write_text(
+                    json.dumps(result_with_material, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            else:
+                print(f"[main] 自动解析后仍有 {len(overlaps)} 处重叠"
+                      f"{'（已返回最优快照）' if not converged else ''}，需在 Blender 中手动调整：")
+                for ov in overlaps:
+                    print(f"  {ov['a_desc']}  ×  {ov['b_desc']}  "
+                          f"({ov['overlap_area_m2']:.2f} m²，重心 {ov['overlap_centroid']})")
+
+        if overlaps:
             # 写入 scene_description.json（blender_to_json.py 需要此文件）
             _scene_dir = Path("simple_scene") / name
             _scene_dir.mkdir(parents=True, exist_ok=True)
