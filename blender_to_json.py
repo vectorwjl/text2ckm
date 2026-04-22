@@ -79,7 +79,7 @@ def main():
     buildings = scene.get("buildings", [])
     roads     = scene.get("roads", [])
 
-    # ── 应用建筑位置更新 ──────────────────────────────────────────────────────
+    # ── 应用建筑位置更新（顶点格式）────────────────────────────────────────────
     print(f"[blender_to_json] 更新场景 '{name}'…")
     moved = 0
     for idx_str, pos in bld_positions.items():
@@ -88,34 +88,29 @@ def main():
             print(f"  警告：building_{idx} 超出范围，跳过。")
             continue
         b = buildings[idx]
-        old_x = float(b.get("x", 0))
-        old_y = float(b.get("y", 0))
-        new_x = round(float(pos["x"]), 2)
-        new_y = round(float(pos["y"]), 2)
-        b["x"] = new_x
-        b["y"] = new_y
-        if "rotation_deg" in pos:
-            b["rotation_deg"] = round(float(pos["rotation_deg"]) % 360, 2)
-        if "height_m" in pos:
+        if "vertices" in pos and len(pos["vertices"]) >= 3:
+            old_verts = b.get("vertices", [])
+            new_verts = [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]]
+            b["vertices"] = new_verts
+            if old_verts:
+                old_cx = sum(v[0] for v in old_verts) / len(old_verts)
+                old_cy = sum(v[1] for v in old_verts) / len(old_verts)
+                new_cx = sum(v[0] for v in new_verts) / len(new_verts)
+                new_cy = sum(v[1] for v in new_verts) / len(new_verts)
+                dx, dy = new_cx - old_cx, new_cy - old_cy
+                if abs(dx) > 0.01 or abs(dy) > 0.01:
+                    print(f"  building_{idx}: centroid Δ=({dx:+.2f}, {dy:+.2f})")
+                    moved += 1
+        if "height" in pos:
             old_h = float(b.get("height", 0))
-            new_h = round(float(pos["height_m"]), 2)
+            new_h = round(float(pos["height"]), 2)
             b["height"] = new_h
             if abs(new_h - old_h) > 0.01:
                 print(f"  building_{idx}: height {old_h:.2f} → {new_h:.2f} m")
-        if "width_m" in pos:
-            b["width"] = round(float(pos["width_m"]), 2)
-        if "length_m" in pos:
-            b["length"] = round(float(pos["length_m"]), 2)
-        dx, dy = new_x - old_x, new_y - old_y
-        if abs(dx) > 0.01 or abs(dy) > 0.01:
-            print(f"  building_{idx}: ({old_x:.2f}, {old_y:.2f}) → "
-                  f"({new_x:.2f}, {new_y:.2f})  Δ=({dx:+.2f}, {dy:+.2f})")
-            moved += 1
 
     print(f"[blender_to_json] {moved}/{len(bld_positions)} 栋建筑位置已更改。")
 
-    # ── 应用道路尺寸更新 ──────────────────────────────────────────────────────
-    import math as _math
+    # ── 应用道路顶点更新 ──────────────────────────────────────────────────────────
     road_moved = 0
     for idx_str, pos in road_positions.items():
         idx = int(idx_str)
@@ -123,23 +118,15 @@ def main():
             print(f"  警告：road_{idx} 超出范围，跳过。")
             continue
         r = roads[idx]
-        if "width_m" in pos:
-            r["width"] = round(float(pos["width_m"]), 2)
-        if "length_m" in pos and "cx" in pos and "cy" in pos and "rotation_deg" in pos:
-            _length = float(pos["length_m"])
-            _cx     = float(pos["cx"])
-            _cy     = float(pos["cy"])
-            _rot    = _math.radians(float(pos["rotation_deg"]))
-            _half   = _length / 2
-            _dx     = _math.cos(_rot) * _half
-            _dy     = _math.sin(_rot) * _half
-            r["start"] = [round(_cx - _dx, 2), round(_cy - _dy, 2)]
-            r["end"]   = [round(_cx + _dx, 2), round(_cy + _dy, 2)]
-            print(f"  road_{idx}: start={r['start']} end={r['end']} width={r['width']:.2f}m")
+        if "vertices" in pos and len(pos["vertices"]) >= 3:
+            r["vertices"] = [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]]
+            if "height" in pos:
+                r["height"] = round(float(pos["height"]), 2)
             road_moved += 1
+            print(f"  road_{idx}: vertices updated ({len(r['vertices'])} pts)")
 
     if road_positions:
-        print(f"[blender_to_json] {road_moved}/{len(road_positions)} 条道路尺寸已更新。")
+        print(f"[blender_to_json] {road_moved}/{len(road_positions)} 条道路已更新。")
 
     # ── 重叠检测 ──────────────────────────────────────────────────────────────
     overlaps = check_overlaps(scene)
