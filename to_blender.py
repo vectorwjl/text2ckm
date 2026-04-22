@@ -132,84 +132,51 @@ _g.data.materials.append(_M["ground"])
 # ── 建筑物 ──────────────────────────────────────────────────────────────────
 import bmesh as _bmesh_mod
 for _i, _b in enumerate(_buildings):
-    _btype = _b.get("type", "rectangular")
-    _x     = float(_b.get("x", 0))
-    _y     = float(_b.get("y", 0))
-    _h     = float(_b.get("height", 10))
-    _rot   = float(_b.get("rotation_deg", 0))
-
-    if _btype == "trapezoidal":
-        _bw = float(_b.get("bottom_width", 12))
-        _tw = float(_b.get("top_width", 8))
-        _l  = float(_b.get("length", 12))
-        _hw_bot, _hw_top, _hl = _bw/2, _tw/2, _l/2
-        _verts = [
-            (-_hw_bot, -_hl, 0),  ( _hw_bot, -_hl, 0),
-            ( _hw_top,  _hl, 0),  (-_hw_top,  _hl, 0),
-            (-_hw_bot, -_hl, _h), ( _hw_bot, -_hl, _h),
-            ( _hw_top,  _hl, _h), (-_hw_top,  _hl, _h),
-        ]
-        _faces_t = [(0,1,2,3),(7,6,5,4),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
-        _bme = _bmesh_mod.new()
-        _vl  = [_bme.verts.new(v) for v in _verts]
-        _bme.verts.ensure_lookup_table()
-        for _f in _faces_t: _bme.faces.new([_vl[i] for i in _f])
-        _mesh_t = bpy.data.meshes.new(f"trap_mesh_{{_i}}")
-        _bme.to_mesh(_mesh_t); _bme.free()
-        _obj = bpy.data.objects.new(f"trap_{{_i}}", _mesh_t)
-        bpy.context.collection.objects.link(_obj)
-        bpy.context.view_layer.objects.active = _obj
-        _obj.select_set(True)
-        _obj.data.materials.append(_M["trapezoidal"])
-        _obj.location       = (_x, _y, 0)   # 顶点已含 z=0..h，无需偏移
-        _obj["ckm_width"]   = _bw
-        _obj["ckm_length"]  = _l
-    else:
-        bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0))
-        _obj = bpy.context.active_object
-        if _btype == "rectangular":
-            _w = float(_b.get("width",  10))
-            _l = float(_b.get("length", 10))
-            _obj.dimensions = (_w, _l, _h)
-            _obj.data.materials.append(_M["rectangular"])
-            _obj["ckm_width"]  = _w
-            _obj["ckm_length"] = _l
-        else:
-            _obj.dimensions = (10, 10, _h)
-            _obj.data.materials.append(_M["other"])
-            _obj["ckm_width"]  = 10.0
-            _obj["ckm_length"] = 10.0
-        _obj.location = (_x, _y, _h / 2)
-
-    _obj.rotation_euler   = (0.0, 0.0, math.radians(_rot))
-    _obj.name             = f"building_{{_i}}"
-    _obj["ckm_height"]    = _h
+    _verts_2d = _b.get("vertices", [])
+    _h        = float(_b.get("height", 10))
+    if len(_verts_2d) < 3:
+        print(f"[setup] building_{{_i}}: too few vertices, skip")
+        continue
+    _bme = _bmesh_mod.new()
+    _bm_verts = [_bme.verts.new((float(_v[0]), float(_v[1]), 0.0)) for _v in _verts_2d]
+    _bme.faces.new(_bm_verts)
+    _ret = _bmesh_mod.ops.extrude_face_region(_bme, geom=_bme.faces[:])
+    _top = [e for e in _ret['geom'] if isinstance(e, _bmesh_mod.types.BMVert)]
+    _bmesh_mod.ops.translate(_bme, verts=_top, vec=(0.0, 0.0, _h))
+    _bme.normal_update()
+    _mesh_b = bpy.data.meshes.new(f"bld_{{_i}}")
+    _bme.to_mesh(_mesh_b); _bme.free()
+    _obj = bpy.data.objects.new(f"building_{{_i}}", _mesh_b)
+    bpy.context.collection.objects.link(_obj)
+    _obj.data.materials.append(_M["rectangular"])
+    _obj["ckm_height"]   = _h
+    _obj["ckm_vertices"] = json.dumps(_verts_2d)
     _obj.lock_rotation[0] = True
     _obj.lock_rotation[1] = True
+    _obj.lock_rotation[2] = True
 
-# ── 道路（仅可视化参考，不导出坐标）────────────────────────────────────────
+# ── 道路（顶点格式可视化参考）────────────────────────────────────────────────
 for _i, _r in enumerate(_roads):
-    if _r.get("type", "straight") != "straight":
+    _rverts_2d = _r.get("vertices", [])
+    _rh = float(_r.get("height", 0.25))
+    if len(_rverts_2d) < 3:
         continue
-    _s = _r.get("start", [0, 0])
-    _e = _r.get("end",   [0, 0])
-    _rw  = float(_r.get("width", 7))
-    _cx, _cy = (_s[0]+_e[0])/2, (_s[1]+_e[1])/2
-    _dx, _dy = _e[0]-_s[0], _e[1]-_s[1]
-    _rl = (_dx**2+_dy**2)**0.5 or 1.0
-    bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0))
-    _ro = bpy.context.active_object
-    _ro.dimensions     = (_rl, _rw, 0.2)
-    _ro.location       = (_cx, _cy, 0.1)
-    _ro.rotation_euler = (0, 0, __import__("math").atan2(_dy, _dx))
-    _ro.name           = f"road_{{_i}}"
+    _rbme = _bmesh_mod.new()
+    _rbm_verts = [_rbme.verts.new((float(_v[0]), float(_v[1]), 0.0)) for _v in _rverts_2d]
+    _rbme.faces.new(_rbm_verts)
+    _rret = _bmesh_mod.ops.extrude_face_region(_rbme, geom=_rbme.faces[:])
+    _rtop = [e for e in _rret['geom'] if isinstance(e, _bmesh_mod.types.BMVert)]
+    _bmesh_mod.ops.translate(_rbme, verts=_rtop, vec=(0.0, 0.0, _rh))
+    _rbme.normal_update()
+    _rmesh = bpy.data.meshes.new(f"road_{{_i}}")
+    _rbme.to_mesh(_rmesh); _rbme.free()
+    _ro = bpy.data.objects.new(f"road_{{_i}}", _rmesh)
+    bpy.context.collection.objects.link(_ro)
     _ro.data.materials.append(_M["road"])
-    _ro["ckm_road_length"] = round(_rl, 2)
-    _ro["ckm_road_width"]  = round(_rw, 2)
-    _ro["ckm_road_cx"]     = round(_cx, 2)
-    _ro["ckm_road_cy"]     = round(_cy, 2)
-    _ro.lock_rotation[0]   = True
-    _ro.lock_rotation[1]   = True
+    _ro["ckm_vertices"] = json.dumps(_rverts_2d)
+    _ro.lock_rotation[0] = True
+    _ro.lock_rotation[1] = True
+    _ro.lock_rotation[2] = True
 
 # ── 俯视正交视角 ─────────────────────────────────────────────────────────────
 import mathutils
@@ -511,18 +478,22 @@ for _obj in bpy.data.objects:
         _idx = int(_obj.name.split("_")[1])
     except (IndexError, ValueError):
         continue
-    _t   = _obj.matrix_world.translation
-    _r   = _obj.matrix_world.to_euler()[2]
-    _h_m = round(float(_obj.dimensions.z), 2)
-    _w_m = round(float(_obj["ckm_width"])  if "ckm_width"  in _obj else _obj.dimensions.x, 2)
-    _l_m = round(float(_obj["ckm_length"]) if "ckm_length" in _obj else _obj.dimensions.y, 2)
+    _wm = _obj.matrix_world
+    _all_world = [_wm @ _v.co for _v in _obj.data.vertices]
+    _min_z = min(_v.z for _v in _all_world)
+    _max_z = max(_v.z for _v in _all_world)
+    # 底面顶点去重（z ≈ min_z）
+    _seen = set()
+    _bottom = []
+    for _v in _all_world:
+        if abs(_v.z - _min_z) < 0.1:
+            _k = (round(_v.x, 1), round(_v.y, 1))
+            if _k not in _seen:
+                _seen.add(_k)
+                _bottom.append([round(_v.x, 2), round(_v.y, 2)])
     _buildings_out[str(_idx)] = {{
-        "x":            round(float(_t.x), 2),
-        "y":            round(float(_t.y), 2),
-        "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
-        "height_m":     _h_m,
-        "width_m":      _w_m,
-        "length_m":     _l_m,
+        "vertices": _bottom,
+        "height":   round(_max_z - _min_z, 2),
     }}
 
 _roads_out = {{}}
@@ -533,16 +504,21 @@ for _obj in bpy.data.objects:
         _idx = int(_obj.name.split("_")[1])
     except (IndexError, ValueError):
         continue
-    _t  = _obj.matrix_world.translation
-    _r  = _obj.matrix_world.to_euler()[2]
-    _rl = round(float(_obj["ckm_road_length"]) if "ckm_road_length" in _obj else _obj.dimensions.x, 2)
-    _rw = round(float(_obj["ckm_road_width"])  if "ckm_road_width"  in _obj else _obj.dimensions.y, 2)
+    _wm = _obj.matrix_world
+    _all_world = [_wm @ _v.co for _v in _obj.data.vertices]
+    _min_z = min(_v.z for _v in _all_world)
+    _max_z = max(_v.z for _v in _all_world)
+    _seen = set()
+    _rbottom = []
+    for _v in _all_world:
+        if abs(_v.z - _min_z) < 0.1:
+            _k = (round(_v.x, 1), round(_v.y, 1))
+            if _k not in _seen:
+                _seen.add(_k)
+                _rbottom.append([round(_v.x, 2), round(_v.y, 2)])
     _roads_out[str(_idx)] = {{
-        "cx":           round(float(_t.x), 2),
-        "cy":           round(float(_t.y), 2),
-        "rotation_deg": round(math.degrees(float(_r)) % 360, 2),
-        "length_m":     _rl,
-        "width_m":      _rw,
+        "vertices": _rbottom,
+        "height":   round(_max_z - _min_z, 2),
     }}
 
 _out = {{"buildings": _buildings_out, "roads": _roads_out}}
