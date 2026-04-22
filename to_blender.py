@@ -137,8 +137,11 @@ for _i, _b in enumerate(_buildings):
     if len(_verts_2d) < 3:
         print(f"[setup] building_{{_i}}: too few vertices, skip")
         continue
+    # 质心作为对象原点，mesh 用局部坐标，R Z 可绕建筑自身中心旋转
+    _cx = sum(float(_v[0]) for _v in _verts_2d) / len(_verts_2d)
+    _cy = sum(float(_v[1]) for _v in _verts_2d) / len(_verts_2d)
     _bme = _bmesh_mod.new()
-    _bm_verts = [_bme.verts.new((float(_v[0]), float(_v[1]), 0.0)) for _v in _verts_2d]
+    _bm_verts = [_bme.verts.new((float(_v[0]) - _cx, float(_v[1]) - _cy, 0.0)) for _v in _verts_2d]
     _bme.faces.new(_bm_verts)
     _ret = _bmesh_mod.ops.extrude_face_region(_bme, geom=_bme.faces[:])
     _top = [e for e in _ret['geom'] if isinstance(e, _bmesh_mod.types.BMVert)]
@@ -148,12 +151,12 @@ for _i, _b in enumerate(_buildings):
     _bme.to_mesh(_mesh_b); _bme.free()
     _obj = bpy.data.objects.new(f"building_{{_i}}", _mesh_b)
     bpy.context.collection.objects.link(_obj)
+    _obj.location = (_cx, _cy, 0.0)
     _obj.data.materials.append(_M["rectangular"])
     _obj["ckm_height"]   = _h
     _obj["ckm_vertices"] = json.dumps(_verts_2d)
     _obj.lock_rotation[0] = True
     _obj.lock_rotation[1] = True
-    _obj.lock_rotation[2] = True
 
 # ── 道路（顶点格式可视化参考）────────────────────────────────────────────────
 for _i, _r in enumerate(_roads):
@@ -161,8 +164,10 @@ for _i, _r in enumerate(_roads):
     _rh = float(_r.get("height", 0.25))
     if len(_rverts_2d) < 3:
         continue
+    _rcx = sum(float(_v[0]) for _v in _rverts_2d) / len(_rverts_2d)
+    _rcy = sum(float(_v[1]) for _v in _rverts_2d) / len(_rverts_2d)
     _rbme = _bmesh_mod.new()
-    _rbm_verts = [_rbme.verts.new((float(_v[0]), float(_v[1]), 0.0)) for _v in _rverts_2d]
+    _rbm_verts = [_rbme.verts.new((float(_v[0]) - _rcx, float(_v[1]) - _rcy, 0.0)) for _v in _rverts_2d]
     _rbme.faces.new(_rbm_verts)
     _rret = _bmesh_mod.ops.extrude_face_region(_rbme, geom=_rbme.faces[:])
     _rtop = [e for e in _rret['geom'] if isinstance(e, _bmesh_mod.types.BMVert)]
@@ -172,11 +177,11 @@ for _i, _r in enumerate(_roads):
     _rbme.to_mesh(_rmesh); _rbme.free()
     _ro = bpy.data.objects.new(f"road_{{_i}}", _rmesh)
     bpy.context.collection.objects.link(_ro)
+    _ro.location = (_rcx, _rcy, 0.0)
     _ro.data.materials.append(_M["road"])
     _ro["ckm_vertices"] = json.dumps(_rverts_2d)
     _ro.lock_rotation[0] = True
     _ro.lock_rotation[1] = True
-    _ro.lock_rotation[2] = True
 
 # ── 俯视正交视角 ─────────────────────────────────────────────────────────────
 import mathutils
