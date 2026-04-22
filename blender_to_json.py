@@ -79,54 +79,61 @@ def main():
     buildings = scene.get("buildings", [])
     roads     = scene.get("roads", [])
 
-    # ── 应用建筑位置更新（顶点格式）────────────────────────────────────────────
-    print(f"[blender_to_json] 更新场景 '{name}'…")
+    # ── 从 Blender 导出数据重建建筑列表（只保留 Blender 中存在的建筑）──────────
+    print(f"[blender_to_json] 重建场景 '{name}' 建筑列表…")
+    new_buildings = []
     moved = 0
-    for idx_str, pos in bld_positions.items():
+    for idx_str in sorted(bld_positions.keys(), key=lambda x: int(x)):
         idx = int(idx_str)
-        if not (0 <= idx < len(buildings)):
-            print(f"  警告：building_{idx} 超出范围，跳过。")
+        pos = bld_positions[idx_str]
+        if "vertices" not in pos or len(pos["vertices"]) < 3:
+            print(f"  警告：building_{idx} 无有效顶点，跳过。")
             continue
-        b = buildings[idx]
-        if "vertices" in pos and len(pos["vertices"]) >= 3:
-            old_verts = b.get("vertices", [])
-            new_verts = [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]]
-            b["vertices"] = new_verts
-            if old_verts:
-                old_cx = sum(v[0] for v in old_verts) / len(old_verts)
-                old_cy = sum(v[1] for v in old_verts) / len(old_verts)
-                new_cx = sum(v[0] for v in new_verts) / len(new_verts)
-                new_cy = sum(v[1] for v in new_verts) / len(new_verts)
-                dx, dy = new_cx - old_cx, new_cy - old_cy
-                if abs(dx) > 0.01 or abs(dy) > 0.01:
-                    print(f"  building_{idx}: centroid Δ=({dx:+.2f}, {dy:+.2f})")
-                    moved += 1
-        if "height" in pos:
-            old_h = float(b.get("height", 0))
-            new_h = round(float(pos["height"]), 2)
-            b["height"] = new_h
-            if abs(new_h - old_h) > 0.01:
-                print(f"  building_{idx}: height {old_h:.2f} → {new_h:.2f} m")
+        orig = buildings[idx] if 0 <= idx < len(buildings) else {}
+        new_verts = [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]]
+        new_h = round(float(pos["height"]), 2) if "height" in pos else round(float(orig.get("height", 10.0)), 2)
+        # 记录质心位移
+        old_verts = orig.get("vertices", [])
+        if old_verts:
+            old_cx = sum(v[0] for v in old_verts) / len(old_verts)
+            old_cy = sum(v[1] for v in old_verts) / len(old_verts)
+            new_cx = sum(v[0] for v in new_verts) / len(new_verts)
+            new_cy = sum(v[1] for v in new_verts) / len(new_verts)
+            dx, dy = new_cx - old_cx, new_cy - old_cy
+            if abs(dx) > 0.01 or abs(dy) > 0.01:
+                print(f"  building_{idx}: centroid Δ=({dx:+.2f}, {dy:+.2f})")
+                moved += 1
+        old_h = float(orig.get("height", 0))
+        if abs(new_h - old_h) > 0.01:
+            print(f"  building_{idx}: height {old_h:.2f} → {new_h:.2f} m")
+        new_buildings.append({
+            "vertices": new_verts,
+            "height":   new_h,
+            "material": orig.get("material", "concrete"),
+        })
 
-    print(f"[blender_to_json] {moved}/{len(bld_positions)} 栋建筑位置已更改。")
+    print(f"[blender_to_json] Blender 中有 {len(new_buildings)} 栋建筑"
+          f"（原 JSON 有 {len(buildings)} 栋），{moved} 栋位置已更改。")
+    scene["buildings"] = new_buildings
 
-    # ── 应用道路顶点更新 ──────────────────────────────────────────────────────────
-    road_moved = 0
-    for idx_str, pos in road_positions.items():
-        idx = int(idx_str)
-        if not (0 <= idx < len(roads)):
-            print(f"  警告：road_{idx} 超出范围，跳过。")
-            continue
-        r = roads[idx]
-        if "vertices" in pos and len(pos["vertices"]) >= 3:
-            r["vertices"] = [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]]
-            if "height" in pos:
-                r["height"] = round(float(pos["height"]), 2)
-            road_moved += 1
-            print(f"  road_{idx}: vertices updated ({len(r['vertices'])} pts)")
-
+    # ── 从 Blender 导出数据重建道路列表（若无导出则保留原始道路）──────────────────
     if road_positions:
-        print(f"[blender_to_json] {road_moved}/{len(road_positions)} 条道路已更新。")
+        new_roads = []
+        for idx_str in sorted(road_positions.keys(), key=lambda x: int(x)):
+            idx = int(idx_str)
+            pos = road_positions[idx_str]
+            if "vertices" not in pos or len(pos["vertices"]) < 3:
+                print(f"  警告：road_{idx} 无有效顶点，跳过。")
+                continue
+            orig_r = roads[idx] if 0 <= idx < len(roads) else {}
+            new_roads.append({
+                "vertices": [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]],
+                "height":   round(float(pos["height"]), 2) if "height" in pos else float(orig_r.get("height", 0.0)),
+                "material": orig_r.get("material", "marble"),
+            })
+            print(f"  road_{idx}: vertices updated ({len(new_roads[-1]['vertices'])} pts)")
+        print(f"[blender_to_json] {len(new_roads)}/{len(road_positions)} 条道路已更新。")
+        scene["roads"] = new_roads
 
     # ── 重叠检测 ──────────────────────────────────────────────────────────────
     overlaps = check_overlaps(scene)
