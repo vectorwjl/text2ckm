@@ -47,6 +47,13 @@ def main():
         print(f"[main] Calling DeepSeek API...")
         result = text_to_scene_json(text)
 
+        # 强制固化道路参数（高度=0.0、材质=marble）和接收机高度（=1.5 m）
+        for _road in result.get("scene", {}).get("roads", []):
+            _road["height"] = 0.0
+            _road["material"] = "marble"
+        if "rx" in result:
+            result["rx"]["rx_height"] = 1.5
+
         # 保存 JSON（含材质默认值）
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)

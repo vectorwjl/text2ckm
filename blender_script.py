@@ -140,7 +140,9 @@ def main():
     for i, r in enumerate(roads):
         _clear_scene()
         verts = r.get("vertices", [])
-        height = float(r.get("height", 0.25))
+        height = float(r.get("height", 0.0))
+        if height < 0.001:
+            height = 0.01  # flat road: minimal extrusion so PLY geometry is valid
         material = r.get("material", "marble")
 
         if len(verts) < 3:
