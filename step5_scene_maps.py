@@ -332,7 +332,7 @@ def generate_scene_maps(
     tx_x      = float(tx.get("x", 0.0))
     tx_y      = float(tx.get("y", 0.0))
     tx_z      = float(tx.get("z", 20.0))
-    rx_height = float(rx.get("rx_height", 1.5))
+    rx_height = 1.5
     freq_ghz  = float(tx.get("frequency_ghz", 28.0))
 
     out_dir = Path(output_dir)

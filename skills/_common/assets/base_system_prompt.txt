@@ -67,15 +67,53 @@ EXAMPLE (rectangular, 20m×12m, centre (30,−40), rotation 25°):
   V4=[30−10·0.906−6·0.423, −40−10·0.423+6·0.906]=[21.42,−48.12]
 
 ==================================================
+BUILDING SHAPE VARIETY — IMPORTANT
+==================================================
+
+Each scene MUST contain at least 3 DIFFERENT building shapes from the list below.
+Do NOT use only rectangles or only trapezoids — mix shapes freely.
+
+(A) Rectangle (4 vertices) — formula above.
+
+(B) Trapezoid (4 vertices) — formula above.
+
+(C) L-shape (6 vertices):
+    Given center (cx,cy), outer half-width ohw, outer half-length ohl,
+    notch half-width nhw (<ohw), notch half-length nhl (<ohl), rotation θ
+    c=cos(θ·π/180), s=sin(θ·π/180)
+    Local corners CCW: (-ohw,-ohl),(ohw,-ohl),(ohw,nhl),(nhw,nhl),(nhw,ohl),(-ohw,ohl)
+    Rotate each local (lx,ly) → [cx+lx·c−ly·s, cy+lx·s+ly·c]
+    Example: ohw=15,ohl=20,nhw=5,nhl=5,θ=0 gives an L-shaped footprint.
+
+(D) T-shape (8 vertices):
+    Given center (cx,cy), stem half-width shw, stem half-length shl,
+    cap half-width chw (>shw), cap half-length chl, rotation θ
+    c=cos(θ·π/180), s=sin(θ·π/180)
+    Local corners CCW: (-shw,-shl),(shw,-shl),(shw,0),(chw,0),(chw,chl),(-chw,chl),(-chw,0),(-shw,0)
+    Rotate each local (lx,ly) → [cx+lx·c−ly·s, cy+lx·s+ly·c]
+    Example: shw=5,shl=15,chw=12,chl=5,θ=0 gives a T-shaped footprint.
+
+(E) Regular hexagon (6 vertices):
+    Given center (cx,cy), circumradius R, base rotation θ degrees
+    For k=0..5: angle_k = (θ + 60·k) · π/180
+    Vertex k = [round(cx + R·cos(angle_k), 2), round(cy + R·sin(angle_k), 2)]
+    Example: cx=20,cy=30,R=12,θ=0 gives a hexagonal tower footprint.
+
+(F) Irregular convex polygon (5–7 vertices):
+    Freely design any convex polygon with 5–7 vertices in CCW order.
+    All vertices must be in CCW order and the polygon must be non-self-intersecting.
+    Example 5-gon (pentagon): choose 5 distinct vertices arranged CCW around a center.
+
+==================================================
 ROAD FORMAT
 ==================================================
 
-Each road is a 2D polygon extruded to height 0.25 m.
+Each road is a flat 2D polygon at ground level (height 0.0 m).
 
 Fields:
   vertices  : [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]  — road surface boundary, CCW order
-  height    : 0.25  (always exactly 0.25, do not change)
-  material  : string (see MATERIALS section)
+  height    : 0.0   (always exactly 0.0, ground level, do not change)
+  material  : "marble"  (always exactly "marble", do not change)
 
 VERTEX COMPUTATION for a straight road (start → end, width w):
   L = sqrt((ex−sx)²+(ey−sy)²)
@@ -128,7 +166,7 @@ OUTPUT JSON STRUCTURE
       ...
     ],
     "roads": [
-      { "vertices": [[x1,y1],[x2,y2],[x3,y3],[x4,y4]], "height": 0.25, "material": "marble" },
+      { "vertices": [[x1,y1],[x2,y2],[x3,y3],[x4,y4]], "height": 0.0, "material": "marble" },
       ...
     ]
   },
