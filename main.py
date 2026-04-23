@@ -143,16 +143,14 @@ def main():
         print(f"[main] Blender 脚本已生成：{_blender_scene_dir}")
 
         if overlaps:
-            print(f"[main] 存在未解决重叠，请在 Blender 中手动调整后继续：")
+            print(f"[main] ⚠ 仍有 {len(overlaps)} 处重叠，继续生成场景（可后续在 Blender 中调整）：")
             print(f"  1. 打开 Blender > Scripting 标签页")
             print(f"  2. Open → {setup_path} → ▶ Run Script")
             print(f"  3. 手动移动建筑物（G 移动，R Z 旋转，N → Dimensions Z 改高度）")
             print(f"  4. Open → {extract_path} → ▶ Run Script")
             print(f"  5. python blender_to_json.py {name}")
-            continue  # 等用户在 Blender 中调整完再运行 blender_to_json.py
 
-        # 无重叠：保存到 example_json 并继续流程
-        print(f"[main] No overlaps detected.")
+        # 始终保存到 example_json
         EXAMPLE_JSON_DIR.mkdir(exist_ok=True)
         example_path = EXAMPLE_JSON_DIR / f"{name}.json"
         example_path.write_text(
@@ -165,21 +163,8 @@ def main():
         rx_params = result.get("rx", {})
         rt_params = result.get("rt", {})
 
-        # Step 2: JSON → PLY + XML
+        # Step 2: JSON → PLY + XML（scene_description.json 已在上方写入）
         scene_dir = str(Path("simple_scene") / name)
-        Path(scene_dir).mkdir(parents=True, exist_ok=True)
-
-        scene_desc_path = Path(scene_dir) / "scene_description.json"
-        full_params = {
-            "location_name": name,
-            "scene": scene_data,
-            "tx": tx_params,
-            "rx": rx_params,
-            "rt": rt_params,
-        }
-        scene_desc_path.write_text(json.dumps(full_params, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"[main] Scene description saved: {scene_desc_path}")
-
         xml_path = generate_scene(scene_data, scene_dir, {**rt_params, "frequency_ghz": tx_params.get("frequency_ghz", 28.0)})
 
         # Step 3: 俯视图
@@ -197,9 +182,8 @@ def main():
         # Step 4: path_gain + LOS 图（Sionna RT max_depth=0）
         photo_path = str(Path("path_gain/path_gain_photo") / f"{name}.png")
         npz_path = str(Path("path_gain/path_gain_raw_data") / f"{name}.npz")
-        los_map = None
         try:
-            los_map = generate_path_gain(
+            generate_path_gain(
                 xml_path=xml_path,
                 photo_path=photo_path,
                 npz_path=npz_path,
@@ -214,7 +198,7 @@ def main():
         # Step 5: 多通道场景地图（高度图/材质图/LOS图）
         maps_dir = str(Path("scene_maps") / name)
         try:
-            generate_scene_maps(str(scene_desc_path), maps_dir)
+            generate_scene_maps(str(_scene_desc_path), maps_dir)
         except Exception as e:
             print(f"[main] WARNING: Scene maps generation failed: {e}")
 
