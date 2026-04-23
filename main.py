@@ -53,6 +53,12 @@ def main():
             _road["material"] = "marble"
         if "rx" in result:
             result["rx"]["rx_height"] = 1.5
+        # 强制地图大小=200m，TX 频率仅允许 3.5 或 28.0 GHz
+        if "rt" in result:
+            result["rt"]["map_size_m"] = 200
+        if "tx" in result:
+            _freq = float(result["tx"].get("frequency_ghz", 28.0))
+            result["tx"]["frequency_ghz"] = 3.5 if abs(_freq - 3.5) < abs(_freq - 28.0) else 28.0
 
         # 将所有顶点坐标和建筑高度统一保留 1 位小数
         for _b in result.get("scene", {}).get("buildings", []):
@@ -110,34 +116,34 @@ def main():
                     print(f"  {ov['a_desc']}  ×  {ov['b_desc']}  "
                           f"({ov['overlap_area_m2']:.2f} m²，重心 {ov['overlap_centroid']})")
 
+        # 始终生成 Blender 脚本（无论有无重叠），供用户随时在 Blender 中查看/调整
+        _scene_dir = Path("simple_scene") / name
+        _scene_dir.mkdir(parents=True, exist_ok=True)
+        _scene_desc_path = _scene_dir / "scene_description.json"
+        _scene_desc_path.write_text(
+            json.dumps(
+                {"location_name": name, "scene": scene_data,
+                 "tx": result.get("tx", {}), "rx": result.get("rx", {}),
+                 "rt": result.get("rt", {})},
+                ensure_ascii=False, indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"[main] Scene description saved: {_scene_desc_path}")
+
+        _blender_scene_dir = _to_blender.BLENDER_SCENES_DIR / name
+        _blender_scene_dir.mkdir(parents=True, exist_ok=True)
+        (_blender_scene_dir / f"{name}_data.json").write_text(
+            json.dumps(scene_data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        setup_path = _blender_scene_dir / f"{name}_setup.py"
+        setup_path.write_text(_to_blender._setup_script(name), encoding="utf-8")
+        extract_path = _blender_scene_dir / f"{name}_extract.py"
+        extract_path.write_text(_to_blender._extract_script(name), encoding="utf-8")
+        print(f"[main] Blender 脚本已生成：{_blender_scene_dir}")
+
         if overlaps:
-            # 写入 scene_description.json（blender_to_json.py 需要此文件）
-            _scene_dir = Path("simple_scene") / name
-            _scene_dir.mkdir(parents=True, exist_ok=True)
-            _scene_desc_path = _scene_dir / "scene_description.json"
-            _scene_desc_path.write_text(
-                json.dumps(
-                    {"location_name": name, "scene": scene_data,
-                     "tx": result.get("tx", {}), "rx": result.get("rx", {}),
-                     "rt": result.get("rt", {})},
-                    ensure_ascii=False, indent=2,
-                ),
-                encoding="utf-8",
-            )
-            print(f"[main] Scene description saved: {_scene_desc_path}")
-
-            # 自动生成 Blender 脚本文件（存入 blender_scenes/{name}/ 子目录）
-            _blender_scene_dir = _to_blender.BLENDER_SCENES_DIR / name
-            _blender_scene_dir.mkdir(parents=True, exist_ok=True)
-            (_blender_scene_dir / f"{name}_data.json").write_text(
-                json.dumps(scene_data, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            setup_path = _blender_scene_dir / f"{name}_setup.py"
-            setup_path.write_text(_to_blender._setup_script(name), encoding="utf-8")
-            extract_path = _blender_scene_dir / f"{name}_extract.py"
-            extract_path.write_text(_to_blender._extract_script(name), encoding="utf-8")
-
-            print(f"[main] Blender 脚本已生成，请按以下步骤手动调整后继续：")
+            print(f"[main] 存在未解决重叠，请在 Blender 中手动调整后继续：")
             print(f"  1. 打开 Blender > Scripting 标签页")
             print(f"  2. Open → {setup_path} → ▶ Run Script")
             print(f"  3. 手动移动建筑物（G 移动，R Z 旋转，N → Dimensions Z 改高度）")
