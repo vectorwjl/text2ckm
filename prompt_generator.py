@@ -45,6 +45,13 @@ MATERIAL_HINTS = [
 
 TX_HEIGHT_RANGES = [(5, 15), (10, 25), (20, 35)]  # (min, max) 分段采样
 
+# 建筑高度分布模式（权重之和为 1.0）
+HEIGHT_PATTERNS = [
+    ("highly_varied", 0.15),   # 高度差异很大
+    ("uniform",       0.15),   # 高度基本一致
+    ("moderate",      0.70),   # 高度有差异但差距不大
+]
+
 # 建筑形状概率表（权重之和为 1.0）
 BUILDING_SHAPES = {
     "矩形":         0.30,
@@ -59,6 +66,25 @@ BUILDING_SHAPES = {
 # ---------------------------------------------------------------------------
 # 形状采样
 # ---------------------------------------------------------------------------
+
+def _sample_height_desc(rng: random.Random) -> str:
+    """按概率采样建筑高度分布模式，返回中文描述字符串。"""
+    patterns = [p[0] for p in HEIGHT_PATTERNS]
+    weights  = [p[1] for p in HEIGHT_PATTERNS]
+    pattern  = rng.choices(patterns, weights=weights, k=1)[0]
+
+    if pattern == "highly_varied":
+        h_min = rng.randint(5, 15)
+        h_max = rng.randint(60, 120)
+        return f"建筑物高度差异显著，各栋高度各不相同（高度从约{h_min}m到约{h_max}m不等）"
+    elif pattern == "uniform":
+        base_h = rng.randint(15, 50)
+        return f"建筑物高度基本一致（各栋高度约{base_h}m，相互之间误差不超过5m）"
+    else:  # moderate
+        h_min = rng.randint(10, 25)
+        h_max = h_min + rng.randint(15, 35)
+        return f"建筑物高度有一定差异但差距不大（高度约在{h_min}m至{h_max}m范围内）"
+
 
 def _sample_shape_counts(rng: random.Random, n_bld: int) -> dict:
     """按概率为 n_bld 栋建筑各选一种形状，返回 {形状: 数量} 字典。"""
@@ -90,20 +116,26 @@ def make_prompt(rng: random.Random) -> str:
 
     city_str = f"模拟{city}" if city else "虚拟"
 
-    if n_road == 1:
+    if road_f == "环形":
+        # Ring road is always 1 ring made of 8 connected straight segments
+        extra = "另加1条直路" if n_road > 1 else ""
+        road_str = f"1个由8段直路首尾相连组成的封闭环形道路（八边形路圈）{extra}"
+    elif n_road == 1:
         road_str = "1条主干道"
     else:
         road_str = f"{n_road}条{road_f}道路"
 
     mat_str = f"，建筑{mat_hint}" if mat_hint else ""
 
-    # 按概率采样各形状数量，写入 prompt
+    # 按概率采样各形状数量和高度分布，写入 prompt
     shape_counts = _sample_shape_counts(rng, n_bld)
-    shape_str = "、".join(f"{v}栋{k}建筑" for k, v in shape_counts.items())
+    shape_str    = "、".join(f"{v}栋{k}建筑" for k, v in shape_counts.items())
+    height_desc  = _sample_height_desc(rng)
 
     lines = [
         f"生成一个{city_str}{scene}场景{mat_str}，",
         f"包含{shape_str}以及{road_str}，每种形状各自保持独特外观。",
+        f"{height_desc}。",
         f"发射机频率{freq}GHz，天线位于{tx_loc}，高度约{tx_h}m。",
         f"场景范围约{mapsize}m×{mapsize}m。",
     ]
