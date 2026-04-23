@@ -182,18 +182,21 @@ def _bresenham_path(x0: int, y0: int, x1: int, y1: int) -> list:
 def _compute_height_material(
     buildings: list,
     mat_norm: dict,
+    roads: list = None,
     ground_mat: str = _DEFAULT_GROUND,
 ) -> tuple:
     """
-    光栅化建筑物，返回高度图与两张材质图（ε_r_norm、σ_norm）。
+    光栅化建筑物和道路，返回高度图与两张材质图（ε_r_norm、σ_norm）。
 
-    背景格点（无建筑覆盖）填充地面材质的归一化属性。
+    渲染顺序：背景（地面材质）→ 道路（覆盖材质，高度保持0）→ 建筑（覆盖材质和高度）。
 
     Returns:
-        height_raw (40,40) float32  — 原始高度（米），地面=0
+        height_raw (40,40) float32  — 原始高度（米），地面/道路=0
         eps_r_map  (40,40) float32  — 归一化 ε_r
         sigma_map  (40,40) float32  — 归一化 σ
     """
+    from overlap_checker import road_to_polygon
+
     g_key = ground_mat if ground_mat in mat_norm else _DEFAULT_GROUND
     g_eps = float(mat_norm[g_key]["eps_r_norm"])
     g_sig = float(mat_norm[g_key]["sigma_norm"])
@@ -202,21 +205,40 @@ def _compute_height_material(
     eps_r_map  = np.full((RESOLUTION, RESOLUTION), g_eps, dtype=np.float32)
     sigma_map  = np.full((RESOLUTION, RESOLUTION), g_sig, dtype=np.float32)
 
-    footprints = []
+    # 道路 footprint（height=0，只覆盖材质）
+    road_footprints = []
+    for r in (roads or []):
+        try:
+            fp   = road_to_polygon(r)
+            mkey = (r.get("material") or "marble").lower().strip()
+            m    = mat_norm.get(mkey, mat_norm.get("marble", mat_norm[_DEFAULT_GROUND]))
+            road_footprints.append((fp, float(m["eps_r_norm"]), float(m["sigma_norm"])))
+        except Exception as e:
+            print(f"[step5] WARNING: 跳过道路（无法生成 footprint）：{e}")
+
+    # 建筑 footprint
+    bld_footprints = []
     for b in buildings:
         try:
             fp    = building_to_polygon(b)
             bh    = float(b.get("height", 0))
             mkey  = (b.get("material") or "concrete").lower().strip()
             m     = mat_norm.get(mkey, mat_norm["concrete"])
-            footprints.append((fp, bh, float(m["eps_r_norm"]), float(m["sigma_norm"])))
+            bld_footprints.append((fp, bh, float(m["eps_r_norm"]), float(m["sigma_norm"])))
         except Exception as e:
             print(f"[step5] WARNING: 跳过建筑物（无法生成 footprint）：{e}")
 
     for j, ry in enumerate(_COORDS):
         for i, rx in enumerate(_COORDS):
             p = Point(float(rx), float(ry))
-            for fp, bh, eps_n, sig_n in footprints:
+            # 先渲染道路（不改高度）
+            for fp, eps_n, sig_n in road_footprints:
+                if fp.contains(p):
+                    eps_r_map[j, i] = eps_n
+                    sigma_map[j, i] = sig_n
+                    break
+            # 再渲染建筑（覆盖道路材质，更新高度）
+            for fp, bh, eps_n, sig_n in bld_footprints:
                 if bh > height_raw[j, i] and fp.contains(p):
                     height_raw[j, i] = bh
                     eps_r_map[j, i]  = eps_n
@@ -326,6 +348,7 @@ def generate_scene_maps(
     name      = full.get("location_name") or desc_path.parent.name
     scene     = full.get("scene", full)
     buildings = scene.get("buildings", [])
+    roads     = scene.get("roads", [])
 
     tx        = full.get("tx", {})
     rx        = full.get("rx", {})
@@ -357,7 +380,7 @@ def generate_scene_maps(
 
     # ── 通道 0/1/2：高度图 & 材质图（ε_r、σ） ────────────────────────────────
     print(f"[step5] 计算高度图和材质图…")
-    height_raw, eps_r_map, sigma_map = _compute_height_material(buildings, mat_norm)
+    height_raw, eps_r_map, sigma_map = _compute_height_material(buildings, mat_norm, roads)
 
     max_h = float(height_raw.max())
     height_norm = (height_raw / max_h).astype(np.float32) if max_h > 0 else height_raw.copy()
