@@ -87,11 +87,6 @@ MATERIAL_ITU: dict = {
 
 _DEFAULT_GROUND = "wet_ground"   # 背景（无建筑格点）默认使用的地面材质
 
-# Metal σ=1e7 S/m is physically a perfect conductor; cap normalization scale
-# at this value so other materials are not all collapsed near 0.
-# Anything above this cap is treated as "perfect conductor" and maps to 1.0.
-SIGMA_NORM_CAP = 10.0  # S/m
-
 
 # ---------------------------------------------------------------------------
 # 材质电磁属性计算与归一化
@@ -117,23 +112,25 @@ def compute_normalized_props(freq_ghz: float) -> tuple:
     计算并归一化所有材质在给定频率下的电磁属性。
 
     ε_r  — min-max 归一化：eps_r_norm = (ε_r - ε_min) / (ε_max - ε_min)
-    σ    — 对数归一化：sigma_norm = log(σ + 1) / log(σ_max + 1)
-             （解决 metal σ=10^7 与其他材质量级差距悬殊的问题，σ=0 自然映射到 0）
+    σ    — 对数归一化，以非金属材质的 σ_max 为基准（ITU-R P.2040）：
+             sigma_norm = log(σ + 1) / log(σ_max_non_metal + 1)，上限截断到 1.0
+             金属（σ=1e7）是良导体，物理类别与介质不同，超出非金属范围自然映射到 1.0
 
     Returns:
         normalized:  {材质名 → {"eps_r", "sigma", "eps_r_norm", "sigma_norm"}}
-        norm_params: 归一化参数（含 eps_min/max、sigma_max、log_sigma_max）
+        norm_params: 归一化参数（含 eps_min/max、sigma_non_metal_max、log_sigma_max）
     """
     props = compute_material_props(freq_ghz)
 
-    eps_vals   = [v["eps_r"] for v in props.values()]
-
+    eps_vals = [v["eps_r"] for v in props.values()]
     eps_min, eps_max = min(eps_vals), max(eps_vals)
 
-    # Clamp each σ to SIGMA_NORM_CAP before computing the log scale so that
-    # metal (σ=1e7) does not compress all other materials into a tiny range.
-    sigma_cap     = SIGMA_NORM_CAP
-    log_sigma_max = math.log(sigma_cap + 1)
+    # 归一化基准：非金属材质在当前频率下的最大 σ（由 ITU-R P.2040 推导）
+    # 金属的 σ=1e7 属于良导体范畴，不参与基准计算，超出范围截断到 1.0
+    sigma_non_metal_max = max(
+        v["sigma"] for k, v in props.items() if k != "metal"
+    )
+    log_sigma_max = math.log(sigma_non_metal_max + 1) if sigma_non_metal_max > 0 else 1.0
 
     normalized = {}
     for mat, p in props.items():
@@ -141,8 +138,10 @@ def compute_normalized_props(freq_ghz: float) -> tuple:
             (p["eps_r"] - eps_min) / (eps_max - eps_min)
             if eps_max > eps_min else 0.0
         )
-        sigma_capped = min(p["sigma"], sigma_cap)
-        sigma_norm   = math.log(sigma_capped + 1) / log_sigma_max
+        sigma_norm = (
+            min(math.log(p["sigma"] + 1) / log_sigma_max, 1.0)
+            if log_sigma_max > 0 else 0.0
+        )
         normalized[mat] = {
             "eps_r":      p["eps_r"],
             "sigma":      p["sigma"],
@@ -151,10 +150,12 @@ def compute_normalized_props(freq_ghz: float) -> tuple:
         }
 
     norm_params = {
-        "freq_ghz":     freq_ghz,
-        "eps_min":      eps_min,      "eps_max":        eps_max,
-        "sigma_cap":    sigma_cap,    "log_sigma_max":  log_sigma_max,
-        "sigma_method": f"log(min(sigma,{sigma_cap})+1)/log({sigma_cap}+1)",
+        "freq_ghz":            freq_ghz,
+        "eps_min":             eps_min,
+        "eps_max":             eps_max,
+        "sigma_non_metal_max": sigma_non_metal_max,
+        "log_sigma_max":       log_sigma_max,
+        "sigma_method":        "log(sigma+1)/log(sigma_non_metal_max+1), capped at 1.0",
     }
     return normalized, norm_params
 
