@@ -31,8 +31,8 @@ def _centroid(verts: list) -> tuple:
 
 def _translate_verts(verts: list, dx: float, dy: float) -> list:
     return [
-        [max(-95.0, min(95.0, float(v[0]) + dx)),
-         max(-95.0, min(95.0, float(v[1]) + dy))]
+        [round(max(-95.0, min(95.0, float(v[0]) + dx)), 1),
+         round(max(-95.0, min(95.0, float(v[1]) + dy)), 1)]
         for v in verts
     ]
 
