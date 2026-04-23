@@ -65,6 +65,15 @@ def road_to_polygon(r: dict) -> Polygon:
 # 重叠检测
 # ---------------------------------------------------------------------------
 
+def _make_valid(poly):
+    """Fix invalid polygon with buffer(0); return None if still invalid."""
+    if poly is None:
+        return None
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    return poly if poly.is_valid and not poly.is_empty else None
+
+
 def check_overlaps(scene_data: dict) -> list:
     """
     检测所有建筑-建筑、建筑-道路的 2D footprint 重叠。
@@ -84,7 +93,7 @@ def check_overlaps(scene_data: dict) -> list:
     b_polys = []
     for i, b in enumerate(buildings):
         try:
-            b_polys.append(building_to_polygon(b))
+            b_polys.append(_make_valid(building_to_polygon(b)))
         except Exception as e:
             print(f"[overlap_checker] WARNING: building {i} skipped: {e}")
             b_polys.append(None)
@@ -93,7 +102,7 @@ def check_overlaps(scene_data: dict) -> list:
     if ENABLE_ROADS:
         for i, r in enumerate(roads):
             try:
-                r_polys.append(road_to_polygon(r))
+                r_polys.append(_make_valid(road_to_polygon(r)))
             except Exception as e:
                 print(f"[overlap_checker] WARNING: road {i} skipped: {e}")
                 r_polys.append(None)
@@ -107,7 +116,11 @@ def check_overlaps(scene_data: dict) -> list:
         for j in range(i + 1, len(buildings)):
             if b_polys[j] is None:
                 continue
-            inter = b_polys[i].intersection(b_polys[j])
+            try:
+                inter = b_polys[i].intersection(b_polys[j])
+            except Exception as e:
+                print(f"[overlap_checker] WARNING: building {i} × building {j} intersection failed: {e}")
+                continue
             if not inter.is_empty and inter.area > 0.01:
                 c = inter.centroid
                 overlaps.append({
@@ -128,7 +141,11 @@ def check_overlaps(scene_data: dict) -> list:
             for j, rp in enumerate(r_polys):
                 if rp is None:
                     continue
-                inter = bp.intersection(rp)
+                try:
+                    inter = bp.intersection(rp)
+                except Exception as e:
+                    print(f"[overlap_checker] WARNING: building {i} × road {j} intersection failed: {e}")
+                    continue
                 if not inter.is_empty and inter.area > 0.01:
                     c = inter.centroid
                     overlaps.append({
