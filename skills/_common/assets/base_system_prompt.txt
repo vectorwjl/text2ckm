@@ -71,16 +71,8 @@ EXAMPLE (rectangular, 20m×12m, centre (30,−40), rotation 25°):
 BUILDING SHAPE VARIETY — IMPORTANT
 ==================================================
 
-Assign each building a shape independently, sampled from the probability distribution below.
-Do NOT make every building the same shape — vary shapes across the scene.
-
-Shape probability distribution (approximate):
-  (A) Rectangle       — 30 %
-  (B) Trapezoid       — 20 %
-  (C) L-shape         — 20 %
-  (D) T-shape         — 15 %
-  (E) Regular hexagon — 10 %
-  (F) Irregular polygon —  5 %
+Generate each building using the shape type and quantity specified in the user prompt.
+Use the vertex computation templates below for each shape.
 
 (A) Rectangle (4 vertices) — formula above.
 
