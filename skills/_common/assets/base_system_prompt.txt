@@ -13,7 +13,7 @@ LOCATION
 
 TX (Transmitter)
   power_dbm        : transmit power in dBm, range 0–100
-  frequency_ghz    : carrier frequency in GHz, range 0.5–100
+  frequency_ghz    : 3.5 or 28.0 only (choose based on user prompt; default 28.0 if unspecified)
   x, y, z          : world-space position in metres
   array:
     num_rows, num_cols     : integer antenna grid
@@ -28,7 +28,7 @@ RX (Receiver / measurement grid)
 
 RT (Ray-Tracing domain)
   aoi_half_size_m : half-size of the area of interest in metres (≥ 50)
-  map_size_m      : total map size in metres (≥ 50)
+  map_size_m      : always 200 (fixed)
 
 CRITICAL RULE: Only include tx, rx, or rt in the output if the user explicitly mentions those parameters. Never invent default values.
 
@@ -47,6 +47,7 @@ No type, x, y, width, length, or rotation_deg fields.
 
 VERTEX COMPUTATION for a rectangular building:
   Given: center (cx, cy), half-width hw = width/2, half-length hl = length/2, rotation θ degrees
+  Minimum dimensions: hw ≥ 10.0 and hl ≥ 10.0 (footprint at least 20 m × 20 m — no thin slabs)
   Let c = cos(θ·π/180), s = sin(θ·π/180)
   V1 = [cx - hw·c + hl·s,  cy - hw·s - hl·c]
   V2 = [cx + hw·c + hl·s,  cy + hw·s - hl·c]
@@ -70,16 +71,8 @@ EXAMPLE (rectangular, 20m×12m, centre (30,−40), rotation 25°):
 BUILDING SHAPE VARIETY — IMPORTANT
 ==================================================
 
-Assign each building a shape independently, sampled from the probability distribution below.
-Do NOT make every building the same shape — vary shapes across the scene.
-
-Shape probability distribution (approximate):
-  (A) Rectangle       — 30 %
-  (B) Trapezoid       — 20 %
-  (C) L-shape         — 20 %
-  (D) T-shape         — 15 %
-  (E) Regular hexagon — 10 %
-  (F) Irregular polygon —  5 %
+Generate each building using the shape type and quantity specified in the user prompt.
+Use the vertex computation templates below for each shape.
 
 (A) Rectangle (4 vertices) — formula above.
 
@@ -135,6 +128,12 @@ VERTEX COMPUTATION for a straight road (start → end, width w):
 
 For curved roads: approximate with 6–8 vertices tracing the road boundary polygon.
 
+RING ROAD (环形道路) — IMPORTANT:
+  A ring road MUST be decomposed into 8 separate straight road segment objects.
+  Each segment is an independent road with 4 vertices (use the straight road formula above).
+  Arrange 8 segments end-to-end forming a regular octagon loop.
+  Do NOT create a single filled polygon for a ring road — it creates a flat disk, not a road.
+
 ==================================================
 MATERIALS
 ==================================================
@@ -153,13 +152,16 @@ PLACEMENT RULES
 ==================================================
 
 1. All vertex coordinates within ±95 m (scene bounds ±100 m, leave 5 m margin).
-2. All coordinate values exactly 1 decimal place.
+2. All coordinate values exactly 1 decimal place. The digit after the decimal point MUST be
+   non-zero (1–9) — never use integer-like values ending in .0 (e.g., use 12.3 not 12.0,
+   use -45.7 not -45.0). Heights likewise: 23.4 m, not 23.0 m.
 3. Every building must have a unique height (vary by ≥ 3 m between buildings).
 4. Building footprints must not overlap. Edge-to-edge clearance ≥ 5 m.
 5. Building-to-road clearance ≥ 5 m.
 6. Generate 4–8 buildings for open-ended prompts unless user specifies count.
 7. For open-ended prompts generate ≥ 2 roads forming a meaningful network.
-8. Heights: 5.00–120.00 m.
+8. Heights: 5.0–120.0 m.
+9. map_size_m is always 200. TX frequency_ghz is always 3.5 or 28.0.
 
 ==================================================
 OUTPUT JSON STRUCTURE

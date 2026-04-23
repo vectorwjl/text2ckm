@@ -22,7 +22,7 @@ SCENE_TYPES = [
 
 ROAD_FORMS = ["平行", "交叉", "L形", "环形"]
 
-FREQS = [0.9, 2.4, 3.5, 6.0, 28.0, 60.0, 77.0, 100.0]
+FREQS = [3.5, 28.0]
 
 TX_LOCS = [
     "场景中心",
@@ -30,7 +30,7 @@ TX_LOCS = [
     "场景西北角", "场景东北角", "场景西南角", "场景东南角",
 ]
 
-MAP_SIZES = [100, 150, 200, 250, 300]
+MAP_SIZES = [200]
 
 CITIES = ["北京", "上海", "深圳", "广州", "成都", "武汉", "杭州", "南京", ""]  # ""=不指定
 
@@ -44,6 +44,31 @@ MATERIAL_HINTS = [
 ]
 
 TX_HEIGHT_RANGES = [(5, 15), (10, 25), (20, 35)]  # (min, max) 分段采样
+
+# 建筑形状概率表（权重之和为 1.0）
+BUILDING_SHAPES = {
+    "矩形":         0.30,
+    "梯形":         0.20,
+    "L形":          0.20,
+    "T形":          0.15,
+    "正六边形":     0.10,
+    "不规则多边形": 0.05,
+}
+
+
+# ---------------------------------------------------------------------------
+# 形状采样
+# ---------------------------------------------------------------------------
+
+def _sample_shape_counts(rng: random.Random, n_bld: int) -> dict:
+    """按概率为 n_bld 栋建筑各选一种形状，返回 {形状: 数量} 字典。"""
+    shapes  = list(BUILDING_SHAPES.keys())
+    weights = list(BUILDING_SHAPES.values())
+    picks   = rng.choices(shapes, weights=weights, k=n_bld)
+    counts: dict = {}
+    for s in picks:
+        counts[s] = counts.get(s, 0) + 1
+    return counts
 
 
 # ---------------------------------------------------------------------------
@@ -72,9 +97,13 @@ def make_prompt(rng: random.Random) -> str:
 
     mat_str = f"，建筑{mat_hint}" if mat_hint else ""
 
+    # 按概率采样各形状数量，写入 prompt
+    shape_counts = _sample_shape_counts(rng, n_bld)
+    shape_str = "、".join(f"{v}栋{k}建筑" for k, v in shape_counts.items())
+
     lines = [
         f"生成一个{city_str}{scene}场景{mat_str}，",
-        f"包含{n_bld}栋不同高度和形状的建筑物以及{road_str}。",
+        f"包含{shape_str}以及{road_str}，每种形状各自保持独特外观。",
         f"发射机频率{freq}GHz，天线位于{tx_loc}，高度约{tx_h}m。",
         f"场景范围约{mapsize}m×{mapsize}m。",
     ]
