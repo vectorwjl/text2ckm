@@ -90,8 +90,8 @@ def main():
             print(f"  警告：building_{idx} 无有效顶点，跳过。")
             continue
         orig = buildings[idx] if 0 <= idx < len(buildings) else {}
-        new_verts = [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]]
-        new_h = round(float(pos["height"]), 2) if "height" in pos else round(float(orig.get("height", 10.0)), 2)
+        new_verts = [[round(float(v[0]), 1), round(float(v[1]), 1)] for v in pos["vertices"]]
+        new_h = round(float(pos["height"]), 1) if "height" in pos else round(float(orig.get("height", 10.0)), 1)
         # 记录质心位移
         old_verts = orig.get("vertices", [])
         if old_verts:
@@ -127,8 +127,8 @@ def main():
                 continue
             orig_r = roads[idx] if 0 <= idx < len(roads) else {}
             new_roads.append({
-                "vertices": [[round(float(v[0]), 2), round(float(v[1]), 2)] for v in pos["vertices"]],
-                "height":   round(float(pos["height"]), 2) if "height" in pos else float(orig_r.get("height", 0.0)),
+                "vertices": [[round(float(v[0]), 1), round(float(v[1]), 1)] for v in pos["vertices"]],
+                "height":   round(float(pos["height"]), 1) if "height" in pos else float(orig_r.get("height", 0.0)),
                 "material": orig_r.get("material", "marble"),
             })
             print(f"  road_{idx}: vertices updated ({len(new_roads[-1]['vertices'])} pts)")

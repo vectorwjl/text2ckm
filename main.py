@@ -54,6 +54,16 @@ def main():
         if "rx" in result:
             result["rx"]["rx_height"] = 1.5
 
+        # 将所有顶点坐标和建筑高度统一保留 1 位小数
+        for _b in result.get("scene", {}).get("buildings", []):
+            _b["vertices"] = [[round(float(v[0]), 1), round(float(v[1]), 1)]
+                               for v in _b.get("vertices", [])]
+            if "height" in _b:
+                _b["height"] = round(float(_b["height"]), 1)
+        for _r in result.get("scene", {}).get("roads", []):
+            _r["vertices"] = [[round(float(v[0]), 1), round(float(v[1]), 1)]
+                               for v in _r.get("vertices", [])]
+
         # 保存 JSON（含材质默认值）
         json_path = Path("text_prompt_json") / f"{name}.json"
         json_path.parent.mkdir(exist_ok=True)
