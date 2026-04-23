@@ -116,7 +116,11 @@ def make_prompt(rng: random.Random) -> str:
 
     city_str = f"模拟{city}" if city else "虚拟"
 
-    if n_road == 1:
+    if road_f == "环形":
+        # Ring road is always 1 ring made of 8 connected straight segments
+        extra = "另加1条直路" if n_road > 1 else ""
+        road_str = f"1个由8段直路首尾相连组成的封闭环形道路（八边形路圈）{extra}"
+    elif n_road == 1:
         road_str = "1条主干道"
     else:
         road_str = f"{n_road}条{road_f}道路"

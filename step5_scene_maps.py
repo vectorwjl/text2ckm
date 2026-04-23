@@ -87,6 +87,11 @@ MATERIAL_ITU: dict = {
 
 _DEFAULT_GROUND = "wet_ground"   # 背景（无建筑格点）默认使用的地面材质
 
+# Metal σ=1e7 S/m is physically a perfect conductor; cap normalization scale
+# at this value so other materials are not all collapsed near 0.
+# Anything above this cap is treated as "perfect conductor" and maps to 1.0.
+SIGMA_NORM_CAP = 10.0  # S/m
+
 
 # ---------------------------------------------------------------------------
 # 材质电磁属性计算与归一化
@@ -122,11 +127,13 @@ def compute_normalized_props(freq_ghz: float) -> tuple:
     props = compute_material_props(freq_ghz)
 
     eps_vals   = [v["eps_r"] for v in props.values()]
-    sigma_vals = [v["sigma"] for v in props.values()]
 
     eps_min, eps_max = min(eps_vals), max(eps_vals)
-    sigma_max        = max(sigma_vals)                    # 对数归一化只需要最大值
-    log_sigma_max    = math.log(sigma_max + 1) if sigma_max > 0 else 1.0
+
+    # Clamp each σ to SIGMA_NORM_CAP before computing the log scale so that
+    # metal (σ=1e7) does not compress all other materials into a tiny range.
+    sigma_cap     = SIGMA_NORM_CAP
+    log_sigma_max = math.log(sigma_cap + 1)
 
     normalized = {}
     for mat, p in props.items():
@@ -134,7 +141,8 @@ def compute_normalized_props(freq_ghz: float) -> tuple:
             (p["eps_r"] - eps_min) / (eps_max - eps_min)
             if eps_max > eps_min else 0.0
         )
-        sigma_norm = math.log(p["sigma"] + 1) / log_sigma_max
+        sigma_capped = min(p["sigma"], sigma_cap)
+        sigma_norm   = math.log(sigma_capped + 1) / log_sigma_max
         normalized[mat] = {
             "eps_r":      p["eps_r"],
             "sigma":      p["sigma"],
@@ -144,9 +152,9 @@ def compute_normalized_props(freq_ghz: float) -> tuple:
 
     norm_params = {
         "freq_ghz":     freq_ghz,
-        "eps_min":      eps_min,      "eps_max":      eps_max,
-        "sigma_max":    sigma_max,    "log_sigma_max": log_sigma_max,
-        "sigma_method": "log(sigma+1)/log(sigma_max+1)",
+        "eps_min":      eps_min,      "eps_max":        eps_max,
+        "sigma_cap":    sigma_cap,    "log_sigma_max":  log_sigma_max,
+        "sigma_method": f"log(min(sigma,{sigma_cap})+1)/log({sigma_cap}+1)",
     }
     return normalized, norm_params
 
